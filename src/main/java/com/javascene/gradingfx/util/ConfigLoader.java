@@ -14,7 +14,7 @@ import java.nio.file.Paths;
  * 配置加载器，负责从 YAML 文件加载配置
  */
 public class ConfigLoader {
-    private static AppConfig instance;
+    private static volatile AppConfig instance;
 
     static {
         load();

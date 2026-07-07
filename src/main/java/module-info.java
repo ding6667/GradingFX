@@ -12,11 +12,13 @@ module com.javascene.gradingfx {
     requires org.yaml.snakeyaml;
     requires com.fasterxml.jackson.databind;
     requires com.fasterxml.jackson.core;
+    requires com.fasterxml.jackson.datatype.jsr310;
     requires static lombok;
     requires org.apache.commons.io;
     requires org.slf4j;
 
-    opens com.javascene.gradingfx.config.property to org.yaml.snakeyaml;
+    opens com.javascene.gradingfx.config.property to org.yaml.snakeyaml, com.fasterxml.jackson.databind;
+    opens com.javascene.gradingfx.enmu to com.fasterxml.jackson.databind;
     opens com.javascene.gradingfx to javafx.fxml;
     exports com.javascene.gradingfx;
     opens com.javascene.gradingfx.controller to javafx.fxml;

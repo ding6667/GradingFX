@@ -6,7 +6,7 @@ dify:
     api-key: "app-h2yIzEsq6W2C5eHN0MtDVRt2"   # Dify应用的API密钥
     base-url: "http://localhost:5001/v1" # Dify API服务的地址
 python:
-  exe: "E:python"
+  exe: "D:\\dev\\python\\python.exe"
   script:
     md_to_docx_path: "src/main/java/com/javascene/gradingfx/pyscript/md_to_docx.py"
     docx_to_md_path: "src/main/java/com/javascene/gradingfx/pyscript/docx_to_md.py"

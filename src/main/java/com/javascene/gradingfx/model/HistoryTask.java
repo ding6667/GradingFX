@@ -13,7 +13,12 @@ public class HistoryTask {
     private SimpleStringProperty createTime;// 创建时间
 
     public HistoryTask() {
-
+        this.taskId = new SimpleStringProperty();
+        this.taskName = new SimpleStringProperty();
+        this.totalStudents = new SimpleStringProperty();
+        this.gradedStudents = new SimpleStringProperty();
+        this.status = new SimpleObjectProperty<>();
+        this.createTime = new SimpleStringProperty();
     }
     public HistoryTask(String taskId, String taskName, String totalStudents, String gradedStudents, HistoryStatus status, String createTime) {
         this.taskId = new SimpleStringProperty(taskId);

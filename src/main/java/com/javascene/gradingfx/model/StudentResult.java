@@ -16,7 +16,15 @@ public class StudentResult {
     private SimpleStringProperty errorMessage; // 错误信息
 
     public StudentResult() {
-
+        this.id = new SimpleStringProperty();
+        this.name = new SimpleStringProperty();
+        this.rawScore = new SimpleStringProperty();
+        this.aiComment = new SimpleStringProperty();
+        this.teacherScore = new SimpleStringProperty();
+        this.teacherComment = new SimpleStringProperty();
+        this.teacherNote = new SimpleStringProperty();
+        this.status = new SimpleObjectProperty<>();
+        this.errorMessage = new SimpleStringProperty();
     }
 
     public StudentResult(String id, String name, String rawScore, String aiComment, String teacherScore, String teacherComment, String teacherNote, String status, String errorMessage) {
@@ -27,9 +35,14 @@ public class StudentResult {
         this.teacherScore = new SimpleStringProperty(teacherScore);
         this.teacherComment = new SimpleStringProperty(teacherComment);
         this.teacherNote = new SimpleStringProperty(teacherNote);
-        this.status = new SimpleObjectProperty<>(ReviewStatus.valueOf(status));
+        ReviewStatus rs;
+        try {
+            rs = (status != null) ? ReviewStatus.valueOf(status) : ReviewStatus.PENDING;
+        } catch (IllegalArgumentException e) {
+            rs = ReviewStatus.PENDING;
+        }
+        this.status = new SimpleObjectProperty<>(rs);
         this.errorMessage = new SimpleStringProperty(errorMessage);
-
     }
 
     public String getId() { return id.get(); }

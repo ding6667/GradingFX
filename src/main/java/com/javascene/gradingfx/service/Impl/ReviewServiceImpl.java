@@ -16,6 +16,7 @@ import com.javascene.gradingfx.exception.ServerDocumentParsingException;
 import com.javascene.gradingfx.model.GradingResult;
 import com.javascene.gradingfx.model.GradingTask;
 import com.javascene.gradingfx.model.StudentHomework;
+import com.javascene.gradingfx.model.StudentScore;
 import com.javascene.gradingfx.service.ReviewService;
 import com.javascene.gradingfx.util.ConfigLoader;
 import com.javascene.gradingfx.util.FileUtil;
@@ -82,10 +83,13 @@ public class ReviewServiceImpl implements ReviewService {
 
             for (File file : files) {
                 if (file.isFile() && file.getName().toLowerCase().endsWith(".zip")) {
-                    // 处理单个学生的压缩包
-                    StudentHomework homework = processStudentZip(file.getAbsolutePath());
-                    if (homework != null) {
-                        results.add(homework);
+                    try {
+                        StudentHomework homework = processStudentZip(file.getAbsolutePath());
+                        if (homework != null) {
+                            results.add(homework);
+                        }
+                    } catch (Exception e) {
+                        log.error("处理学生压缩包失败: {}, 原因: {}", file.getName(), e.getMessage());
                     }
                 }
             }
@@ -204,6 +208,7 @@ public class ReviewServiceImpl implements ReviewService {
         } catch (IOException e) {
             throw new RuntimeException(e);
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new RuntimeException(e);
         }
     }
@@ -266,7 +271,7 @@ public class ReviewServiceImpl implements ReviewService {
 
             int exitCode = process.exitValue();
             if (exitCode == 0) {
-                String[] parts = outputPath.split(Pattern.quote("-"));
+                String[] parts = outputPath.split(Pattern.quote("-"), 2);
                 outputPath = parts.length > 1 ? parts[1].trim() : outputPath.trim();
                 log.info("Word 文档已顺利生成。{}", outputPath);
                 return Map.of("wordPath", outputPath);
@@ -301,10 +306,14 @@ public class ReviewServiceImpl implements ReviewService {
             JsonNode dataNode = root.get("output");
             if(dataNode.isArray()){
                 for (JsonNode student : dataNode) {
-                    String studentName = student.get("stu_name").asText();
-                    String studentId = student.get("stu_id").asText();
-                    String totalScore = student.get("total_score").asText();
-                    String review =  student.get("review").asText();
+                    String studentName = student.path("stu_name").asText("");
+                    String studentId = student.path("stu_id").asText("");
+                    String totalScore = student.path("total_score").asText("");
+                    String review =  student.path("review").asText("");
+                    if (studentId.isEmpty()) {
+                        log.warn("跳过缺少学号的学生记录");
+                        continue;
+                    }
                     // key = 学生学号，value = list（name,totalScore）用于生成execl文件
                     result.put(studentId, List.of(studentName, totalScore));
                     // 存储review，用于生成word文档
@@ -411,7 +420,7 @@ public class ReviewServiceImpl implements ReviewService {
         GradingTask gradingTask = new GradingTask();
         gradingTask.setId(UUID.randomUUID().toString());
         gradingTask.setFileId(zipFilePath);
-        gradingTask.setStatus(0);
+        gradingTask.setStatus(GradingTask.STATUS_PROCESSING);
         gradingTask.setCreateTime(LocalDateTime.now());
 
         GradingResult gradingResult = new GradingResult();
@@ -422,6 +431,10 @@ public class ReviewServiceImpl implements ReviewService {
         // 先解压zip文件，转为md文件并调用Dify工作流
         try {
             List<StudentHomework> studentHomeworks = extractFromTotalZip(zipFilePath);
+            // 从zip文件名提取任务名，设置学生总数
+            String zipName = new File(zipFilePath).getName();
+            gradingTask.setTaskName(zipName.endsWith(".zip") ? zipName.substring(0, zipName.length() - 4) : zipName);
+            gradingTask.setTotalStudents(studentHomeworks.size());
             // 调用Dify工作流
             // 检查学生作业列表是否为空
             if (studentHomeworks.isEmpty()) {
@@ -451,18 +464,41 @@ public class ReviewServiceImpl implements ReviewService {
                 Map<String, String> excelResult = generateExcel(json);
                 String excelPath = excelResult != null ? excelResult.get("excelPath") : null;
 
+                // 构建并持久化学生成绩
+                List<StudentScore> scores = new ArrayList<>();
+                for (Map.Entry<String, Object> entry : json.entrySet()) {
+                    if (entry.getValue() instanceof List<?> list && list.size() >= 2) {
+                        StudentScore score = new StudentScore();
+                        score.setTaskId(gradingTask.getId());
+                        score.setStudentId(entry.getKey());
+                        score.setStudentName(String.valueOf(list.get(0)));
+                        score.setRawScore(String.valueOf(list.get(1)));
+                        score.setStatus("APPROVED");
+                        scores.add(score);
+                    }
+                }
+                gradingTask.setGradedStudents(scores.size());
+                FileUtil.ensureDirExists(resultDir);
+                String scoresPath = resultDir + File.separator + "scores.json";
+                synchronized (FILE_LOCK) {
+                    List<StudentScore> existingScores = FileUtil.exists(scoresPath)
+                            ? FileUtil.readJsonList(scoresPath, StudentScore.class) : new ArrayList<>();
+                    existingScores.addAll(scores);
+                    FileUtil.writeJsonList(scoresPath, existingScores);
+                }
+
                 // 保存处理结果到文件
-                gradingTask.setStatus(2);
+                gradingTask.setStatus(GradingTask.STATUS_SUCCESS);
                 gradingTask.setFinishTime(LocalDateTime.now());
                 FileUtil.ensureDirExists(taskDir);
-                FileUtil.writeJson(taskDir + File.separator + gradingTask.getId() + ".json", gradingTask);
+                appendToJsonList(taskDir + File.separator + "tasks.json", gradingTask, GradingTask.class);
 
                 gradingResult.setStatus(0);
                 gradingResult.setWordPath(wordPath);
                 gradingResult.setExcelPath(excelPath);
                 gradingResult.setExpireTime(LocalDateTime.now().plusDays(7));
                 FileUtil.ensureDirExists(resultDir);
-                FileUtil.writeJson(resultDir + File.separator + gradingResult.getTaskId() + ".json", gradingResult);
+                appendToJsonList(resultDir + File.separator + "results.json", gradingResult, GradingResult.class);
                 return "wordPath=" + wordPath + "&excelPath=" + excelPath;
 
 
@@ -473,18 +509,16 @@ public class ReviewServiceImpl implements ReviewService {
                 throw new BusinessException(ErrorCodeConstant.UNKNOWN_ERROR,ErrorConstant.UNKNOWN_ERROR);
             }
         } catch (BusinessException e) {
-            if(e.getCode() == ErrorCodeConstant.FILE_NOT_FOUND){
-                // 保存处理失败任务到文件
-                gradingTask.setStatus(4);
-                gradingTask.setErrorMessage(e.getMessage());
-                gradingTask.setRetryCount(0);
-                gradingTask.setFinishTime(LocalDateTime.now());
-                try {
-                    FileUtil.ensureDirExists(taskDir);
-                    FileUtil.writeJson(taskDir + File.separator + gradingTask.getId() + ".json", gradingTask);
-                } catch (Exception ex) {
-                    log.error("保存失败任务文件异常: {}", ex.getMessage());
-                }
+            // 所有错误类型都持久化失败任务
+            gradingTask.setStatus(GradingTask.STATUS_FAILED);
+            gradingTask.setErrorMessage(e.getMessage());
+            gradingTask.setRetryCount(0);
+            gradingTask.setFinishTime(LocalDateTime.now());
+            try {
+                FileUtil.ensureDirExists(taskDir);
+                appendToJsonList(taskDir + File.separator + "tasks.json", gradingTask, GradingTask.class);
+            } catch (Exception ex) {
+                log.error("保存失败任务文件异常: {}", ex.getMessage());
             }
             throw e;
         }catch (Exception e) {
@@ -501,7 +535,26 @@ public class ReviewServiceImpl implements ReviewService {
      * @return
      */
     private Map<String, String> generateExcel(Map<String, Object> json) {
-        return null;
+        log.warn("Excel 生成功能尚未实现，跳过 Excel 导出");
+        return new HashMap<>();
+    }
+
+    /**
+     * 向 JSON 列表文件追加一个对象：读出 list → add → 写回
+     */
+    private static final Object FILE_LOCK = new Object();
+
+    private <T> void appendToJsonList(String filePath, T element, Class<T> clazz) throws IOException {
+        synchronized (FILE_LOCK) {
+            List<T> list;
+            if (FileUtil.exists(filePath)) {
+                list = FileUtil.readJsonList(filePath, clazz);
+            } else {
+                list = new ArrayList<>();
+            }
+            list.add(element);
+            FileUtil.writeJson(filePath, list);
+        }
     }
 
 }

@@ -1,6 +1,8 @@
 package com.javascene.gradingfx.controller;
 
 import com.javascene.gradingfx.model.StudentResult;
+import com.javascene.gradingfx.service.HistoryService;
+import com.javascene.gradingfx.service.Impl.HistoryServiceImpl;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
@@ -47,6 +49,7 @@ public class MainController {
     @FXML private TableColumn<StudentResult, String> statusColumn;
 
     private final ObservableList<StudentResult> studentData = FXCollections.observableArrayList();
+    private final HistoryService historyService = new HistoryServiceImpl();
 
 
 
@@ -55,6 +58,13 @@ public class MainController {
         // Setup table columns
         idColumn.setCellValueFactory(cellData -> cellData.getValue().idProperty());
         nameColumn.setCellValueFactory(cellData -> cellData.getValue().nameProperty());
+        scoreColumn.setCellValueFactory(cellData -> cellData.getValue().rawScoreProperty());
+        commentColumn.setCellValueFactory(cellData -> cellData.getValue().aiCommentProperty());
+        statusColumn.setCellValueFactory(cellData -> {
+            javafx.beans.property.SimpleObjectProperty<com.javascene.gradingfx.enmu.ReviewStatus> prop = cellData.getValue().statusProperty();
+            if (prop == null || prop.get() == null) return new javafx.beans.property.SimpleStringProperty("");
+            return new javafx.beans.property.SimpleStringProperty(prop.get().getDisplayName());
+        });
 
 
         // Load mock data
@@ -75,6 +85,17 @@ public class MainController {
 
         // Setup tree
         setupStudentTree();
+    }
+
+    public void loadResults(String taskId) {
+        List<StudentResult> results = historyService.loadStudentResults(taskId);
+        studentData.setAll(results);
+        resultTable.setItems(studentData);
+        totalLabel.setText(String.valueOf(studentData.size()));
+        long completed = results.stream().filter(r -> r.getStatus() == com.javascene.gradingfx.enmu.ReviewStatus.APPROVED).count();
+        long failed = results.stream().filter(r -> r.getStatus() == com.javascene.gradingfx.enmu.ReviewStatus.FAILED).count();
+        completedLabel.setText(String.valueOf(completed));
+        failedLabel.setText(String.valueOf(failed));
     }
 
     private void setupStudentTree() {
@@ -186,6 +207,4 @@ public class MainController {
     private void refresh() {
 
     }
-
-
 }

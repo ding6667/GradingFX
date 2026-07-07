@@ -1,7 +1,14 @@
 package com.javascene.gradingfx.controller;
 
+import com.javascene.gradingfx.enmu.HistoryStatus;
+import com.javascene.gradingfx.model.HistoryTask;
+import com.javascene.gradingfx.service.Impl.HistoryServiceImpl;
+import com.javascene.gradingfx.service.HistoryService;
+import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
+
+import java.util.List;
 
 public class HistoryController {
 
@@ -15,67 +22,53 @@ public class HistoryController {
     @FXML private TableColumn<HistoryTask, String> taskTimeColumn;
     @FXML private TableColumn<HistoryTask, String> studentCountColumn;
     @FXML private TableColumn<HistoryTask, String> taskStatusColumn;
-    @FXML private TableColumn<HistoryTask, String> operationColumn;
+    @FXML private TableColumn<HistoryTask, ?> operationColumn;
+
+    private final HistoryService historyService = new HistoryServiceImpl();
 
     @FXML
     public void initialize() {
-        // Setup columns
         taskNameColumn.setCellValueFactory(cellData -> cellData.getValue().taskNameProperty());
-        taskTimeColumn.setCellValueFactory(cellData -> cellData.getValue().taskTimeProperty());
-        studentCountColumn.setCellValueFactory(cellData -> cellData.getValue().studentCountProperty());
-        taskStatusColumn.setCellValueFactory(cellData -> cellData.getValue().statusProperty());
-        operationColumn.setCellValueFactory(cellData -> cellData.getValue().operationProperty());
+        taskTimeColumn.setCellValueFactory(cellData -> cellData.getValue().createTimeProperty());
+        studentCountColumn.setCellValueFactory(cellData -> {
+            HistoryTask t = cellData.getValue();
+            return new javafx.beans.property.SimpleStringProperty(t.getGradedStudents() + "/" + t.getTotalStudents());
+        });
+        taskStatusColumn.setCellValueFactory(cellData -> {
+            HistoryStatus s = cellData.getValue().getStatus();
+            return new javafx.beans.property.SimpleStringProperty(s != null ? s.getDisplayName() : "");
+        });
 
-        // Load mock data
-        loadMockData();
+        loadTasks();
     }
 
-    private void loadMockData() {
-        historyTable.getItems().addAll(
-            new HistoryTask("Java作业_2024秋_计科1班", "2024-12-20 14:30", "45", "✅ 已完成", "👁 查看"),
-            new HistoryTask("数据结构_期中_计科2班", "2024-12-18 09:15", "42", "✅ 已完成", "👁 查看"),
-            new HistoryTask("Java作业_2024秋_软工1班", "2024-12-15 16:45", "38", "✅ 已完成", "👁 查看"),
-            new HistoryTask("算法设计_实验3_计科1班", "2024-12-12 11:20", "44", "⚠️ 部分失败", "👁 查看")
-        );
+    private void loadTasks() {
+        List<HistoryTask> tasks = historyService.loadAllTasks();
+        historyTable.setItems(FXCollections.observableArrayList(tasks));
     }
 
     @FXML void handleRefresh() {
-        System.out.println("Refreshing history...");
+        loadTasks();
     }
 
     @FXML void handleViewResult() {
-        System.out.println("Viewing result...");
+        HistoryTask selected = historyTable.getSelectionModel().getSelectedItem();
+        if (selected != null) {
+            System.out.println("查看结果: " + selected.getTaskId());
+        }
     }
 
     @FXML void handleReExport() {
-        System.out.println("Re-exporting...");
+        HistoryTask selected = historyTable.getSelectionModel().getSelectedItem();
+        if (selected != null) {
+            System.out.println("重新导出: " + selected.getTaskId());
+        }
     }
 
     @FXML void handleDeleteTask() {
-        System.out.println("Deleting task...");
-    }
-
-    // Simple model class for history
-    public static class HistoryTask {
-        private final javafx.beans.property.SimpleStringProperty taskName;
-        private final javafx.beans.property.SimpleStringProperty taskTime;
-        private final javafx.beans.property.SimpleStringProperty studentCount;
-        private final javafx.beans.property.SimpleStringProperty status;
-        private final javafx.beans.property.SimpleStringProperty operation;
-
-        public HistoryTask(String taskName, String taskTime, String studentCount,
-                          String status, String operation) {
-            this.taskName = new javafx.beans.property.SimpleStringProperty(taskName);
-            this.taskTime = new javafx.beans.property.SimpleStringProperty(taskTime);
-            this.studentCount = new javafx.beans.property.SimpleStringProperty(studentCount);
-            this.status = new javafx.beans.property.SimpleStringProperty(status);
-            this.operation = new javafx.beans.property.SimpleStringProperty(operation);
+        HistoryTask selected = historyTable.getSelectionModel().getSelectedItem();
+        if (selected != null) {
+            System.out.println("删除任务: " + selected.getTaskId());
         }
-
-        public javafx.beans.property.SimpleStringProperty taskNameProperty() { return taskName; }
-        public javafx.beans.property.SimpleStringProperty taskTimeProperty() { return taskTime; }
-        public javafx.beans.property.SimpleStringProperty studentCountProperty() { return studentCount; }
-        public javafx.beans.property.SimpleStringProperty statusProperty() { return status; }
-        public javafx.beans.property.SimpleStringProperty operationProperty() { return operation; }
     }
 }
