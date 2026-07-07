@@ -4,16 +4,25 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.javascene.gradingfx.config.bean.DifyClient;
+import com.javascene.gradingfx.config.property.AppConfig;
+import com.javascene.gradingfx.config.property.DataConfig;
+import com.javascene.gradingfx.config.property.FileConfig;
 import com.javascene.gradingfx.config.property.PythonConfig;
-import com.javascene.gradingfx.constant.ErrorMessageConstant;
+import com.javascene.gradingfx.constant.ErrorConstant;
+import com.javascene.gradingfx.constant.ErrorCodeConstant;
 import com.javascene.gradingfx.exception.BusinessException;
+import com.javascene.gradingfx.exception.FilesNotFoundException;
+import com.javascene.gradingfx.exception.ServerDocumentParsingException;
+import com.javascene.gradingfx.model.GradingResult;
+import com.javascene.gradingfx.model.GradingTask;
 import com.javascene.gradingfx.model.StudentHomework;
 import com.javascene.gradingfx.service.ReviewService;
 import com.javascene.gradingfx.util.ConfigLoader;
+import com.javascene.gradingfx.util.FileUtil;
 import com.javascene.gradingfx.util.ZipUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -27,11 +36,27 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+@Slf4j
 public class ReviewServiceImpl implements ReviewService {
-    private final Logger log = LoggerFactory.getLogger(ReviewServiceImpl.class);
-    private final DifyClient difyClient = new DifyClient(ConfigLoader.getConfig().getDify().getApi().getBaseUrl());
-
     private final ObjectMapper mapper =  new ObjectMapper();
+
+    private final String pythonExe;
+    private final String pythonScriptPath;   // docx → md 脚本路径
+    private final String mdToDocxScriptPath; // md → docx 脚本路径
+    private final String tempWord;           // word 临时输出目录
+    private final DifyClient difyClient;
+    private final com.javascene.gradingfx.config.property.DifyConfig.ApiConfig difyProperty;
+
+    public ReviewServiceImpl() {
+        AppConfig config = ConfigLoader.getConfig();
+        PythonConfig python = config.getPython();
+        this.pythonExe = python.getExe();
+        this.pythonScriptPath = python.getScript().getDocxToMdPath();
+        this.mdToDocxScriptPath = python.getScript().getMdToDocxPath();
+        this.tempWord = config.getFile().getWordPath();
+        this.difyClient = new DifyClient(config.getDify().getApi().getBaseUrl());
+        this.difyProperty = config.getDify().getApi();
+    }
 
     //匹配学号和姓名
     private static final Pattern STUDENT_INFO_PATTERN = Pattern.compile("^(\\d{10})(\\s*)([\\u4e00-\\u9fa5·]{2,16})$");
@@ -87,17 +112,17 @@ public class ReviewServiceImpl implements ReviewService {
             String studentId = null, studentName = null;
             if (m.find()) {
                 studentId = m.group(1);
-                studentName = m.group(2);
+                studentName = m.group(3);
             } else {
                 // 如果文件名不符合预期，尝试从解压后的文件夹名提取
-                // 假设解压后只有一个文件夹，且命名为“学号姓名项目作业”
+                // 假设解压后只有一个文件夹，且命名为”学号姓名项目作业”
                 File[] subFiles = tempStudentDir.toFile().listFiles(File::isDirectory);
                 if (subFiles != null && subFiles.length == 1) {
                     String folderName = subFiles[0].getName();
                     Matcher folderMatcher = STUDENT_INFO_PATTERN.matcher(folderName);
                     if (folderMatcher.find()) {
                         studentId = folderMatcher.group(1);
-                        studentName = folderMatcher.group(2);
+                        studentName = folderMatcher.group(3);
                     }
                 }
             }
@@ -135,9 +160,6 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     public Map<String, List<String>> wordConvertToMd(List<String> fileUrls) {
         log.info("开始转换Word文档为Markdown格式");
-        PythonConfig python = ConfigLoader.getConfig().getPython();
-        String pythonExe = python.getExe();
-        String pythonScriptPath = python.getScript().getDocxToMdPath();
         try {
             //结果集
             List<String> results = new ArrayList<>();
@@ -192,20 +214,17 @@ public class ReviewServiceImpl implements ReviewService {
         Path tempFile = null;
         // 校验输入参数
         if (null == difyResponseJson || difyResponseJson.isEmpty()) {
-            throw new BusinessException(ErrorMessageConstant.MD_CONTENT_EMPTY);
+            throw new ServerDocumentParsingException(ErrorConstant.MD_CONTENT_EMPTY);
         }
         log.info(difyResponseJson);
 
         String outputJson = extractOutputAsJson(difyResponseJson);
         // 校验outputJson是否为空
         if(outputJson == null){
-            throw new BusinessException(ErrorMessageConstant.MD_CONTENT_INVALID);
+            throw new ServerDocumentParsingException(ErrorConstant.MD_CONTENT_INVALID);
         }
 
-        PythonConfig python = ConfigLoader.getConfig().getPython();
-        String pythonExe = python.getExe();
-        String mdToDocxScriptPath = python.getScript().getMdToDocxPath();
-        String tempWord = ConfigLoader.getConfig().getFile().getWordPath();
+
         try {
             //在系统默认临时目录下创建一个临时文件
             //前缀是 "dify_review_"，后缀是 ".json"
@@ -239,13 +258,21 @@ public class ReviewServiceImpl implements ReviewService {
                 }
             }
 
-            int exitCode = process.waitFor();
+            boolean finished = process.waitFor(120, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                throw new RuntimeException("Python md_to_docx 脚本执行超时");
+            }
+
+            int exitCode = process.exitValue();
             if (exitCode == 0) {
-                outputPath = outputPath.split(Pattern.quote("-"))[1].trim();
+                String[] parts = outputPath.split(Pattern.quote("-"));
+                outputPath = parts.length > 1 ? parts[1].trim() : outputPath.trim();
                 log.info("Word 文档已顺利生成。{}", outputPath);
                 return Map.of("wordPath", outputPath);
             } else {
                 log.error("Python 脚本执行失败，退出码: {}", exitCode);
+                throw new RuntimeException("Python md_to_docx 脚本执行失败，退出码: " + exitCode);
             }
 
         } catch (Exception e) {
@@ -261,7 +288,6 @@ public class ReviewServiceImpl implements ReviewService {
                 }
             }
         }
-        return null;
     }
 
     private Map<String, Object> handleProject_zip(String outputJson) {
@@ -270,7 +296,7 @@ public class ReviewServiceImpl implements ReviewService {
         try{
             JsonNode root = mapper.readTree(outputJson);
             if (!root.has("output")) {
-                throw new BusinessException(ErrorMessageConstant.MD_CONTENT_INVALID);
+                throw new ServerDocumentParsingException(ErrorConstant.MD_CONTENT_INVALID);
             }
             JsonNode dataNode = root.get("output");
             if(dataNode.isArray()){
@@ -287,6 +313,8 @@ public class ReviewServiceImpl implements ReviewService {
                 result.put("reviews", reviews);
             }
             return result;
+        } catch (ServerDocumentParsingException e) {
+            throw e;
         } catch (Exception e) {
             log.error("JSON 解析失败: " + e.getMessage());
             return null;
@@ -304,25 +332,25 @@ public class ReviewServiceImpl implements ReviewService {
             JsonNode root = mapper.readTree(difyResponseJson);
 
             if (!root.has("task_id")) {
-                System.err.println("JSON 中未找到 'task_id' 键");
+                log.error("JSON 中未找到 'task_id' 键");
                 return null;
             }
 
             JsonNode dataNode = root.get("data");
             if (dataNode == null || !dataNode.has("status")) {
-                System.err.println("JSON 中未找到 'status' 键");
+                log.error("JSON 中未找到 'status' 键");
                 return null;
             }
 
             String status = dataNode.get("status").asText();
-            if (!"succeeded".equals(status)) {  // 注意：是 succeeded，不是 success
-                System.err.println("Dify 工作流调用失败，状态为：" + status);
+            if (!"succeeded".equals(status)) {
+                log.error("Dify 工作流调用失败，状态为：{}", status);
                 return null;
             }
 
             JsonNode outputsNode = dataNode.get("outputs");
             if (outputsNode == null || !outputsNode.has("output")) {
-                System.err.println("JSON 中未找到 'output' 键");
+                log.error("JSON 中未找到 'output' 键");
                 return null;
             }
 
@@ -332,7 +360,7 @@ public class ReviewServiceImpl implements ReviewService {
             return mapper.writeValueAsString(resultJson);
 
         } catch (Exception e) {
-            System.err.println("JSON 解析失败: " + e.getMessage());
+            log.error("JSON 解析失败: {}", e.getMessage());
             return null;
         }
     }
@@ -345,12 +373,12 @@ public class ReviewServiceImpl implements ReviewService {
      */
     @Override
     public String runWorkflowWithCommonFiles(List<String> fileUrls, String rubric) {
+        // 检查文件路径列表是否为空
+        if (fileUrls.isEmpty()) {
+            throw new FilesNotFoundException(ErrorConstant.FILES_NOT_FOUND);}
         // 先转换为Markdown格式
         Map<String, List<String>> mdFiles = wordConvertToMd(fileUrls);
         // 调用Dify工作流
-        // 检查文件路径列表是否为空
-        if (fileUrls.isEmpty()) {
-            throw new BusinessException(ErrorMessageConstant.FILES_NOT_FOUND);}
         Map<String, Object> requestBody  = new HashMap<>();
         if (null != rubric && !rubric.isEmpty()) {
             requestBody.put("rubric", rubric);
@@ -361,26 +389,28 @@ public class ReviewServiceImpl implements ReviewService {
         try {
             String result = difyClient.runWorkflowBlocking(difyProperty.getApiKey(), requestBody);
             return mdConvertToWord(result).get("wordPath");
+        } catch (ServerDocumentParsingException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
     /**
-     * 调用Dify工作流
-     * @param uploadFileId 项目zip文件id
+     * 调用Dify工作流（项目zip模式）
+     * @param zipFilePath 项目zip文件路径
      * @param rubric 评分标准
      * @return 完整拼接后的字符串（包含 Dify 吐出来的所有块）
      */
     @Override
-    public String runWorkflowWithProjectZip(String uploadFileId, String rubric) {
-        // 准备初始数据
-        UploadFile zip = uploadMapper.selectById(uploadFileId);
-        String zipFilePath = zip.getStoragePath();
+    public String runWorkflowWithProjectZip(String zipFilePath, String rubric) {
+        DataConfig dataConfig = ConfigLoader.getConfig().getData();
+        String taskDir = dataConfig.getTask();
+        String resultDir = dataConfig.getResult();
 
         GradingTask gradingTask = new GradingTask();
         gradingTask.setId(UUID.randomUUID().toString());
-        gradingTask.setFileId(uploadFileId);
+        gradingTask.setFileId(zipFilePath);
         gradingTask.setStatus(0);
         gradingTask.setCreateTime(LocalDateTime.now());
 
@@ -408,6 +438,9 @@ public class ReviewServiceImpl implements ReviewService {
                 String result = difyClient.runWorkflowBlocking(difyProperty.getApiKey(), requestBody);
                 log.info("Dify工作流成功调用，开始转换为Word文档");
                 Map<String, Object> json = handleProject_zip(result);
+                if (json == null) {
+                    throw new RuntimeException("Dify 返回结果解析失败");
+                }
                 JsonNode outputNode = mapper.valueToTree(json.getOrDefault("reviews", null));
                 ObjectNode resultJson = mapper.createObjectNode();
                 resultJson.set("output", outputNode);
@@ -415,33 +448,43 @@ public class ReviewServiceImpl implements ReviewService {
                 String wordPath = mdConvertToWord(wordJsonStr).get("wordPath");
                 log.info("开始生成Excel文档");
                 json.remove("reviews");
-                String excelPath = generateExcel(json).get("excelPath");
+                Map<String, String> excelResult = generateExcel(json);
+                String excelPath = excelResult != null ? excelResult.get("excelPath") : null;
 
-                // 保存处理成功文件到数据库
+                // 保存处理结果到文件
                 gradingTask.setStatus(2);
                 gradingTask.setFinishTime(LocalDateTime.now());
-                gradingTaskMapper.insert(gradingTask);
+                FileUtil.ensureDirExists(taskDir);
+                FileUtil.writeJson(taskDir + File.separator + gradingTask.getId() + ".json", gradingTask);
 
                 gradingResult.setStatus(0);
                 gradingResult.setWordPath(wordPath);
                 gradingResult.setExcelPath(excelPath);
                 gradingResult.setExpireTime(LocalDateTime.now().plusDays(7));
-                gradingResultMapper.insert(gradingResult);
+                FileUtil.ensureDirExists(resultDir);
+                FileUtil.writeJson(resultDir + File.separator + gradingResult.getTaskId() + ".json", gradingResult);
                 return "wordPath=" + wordPath + "&excelPath=" + excelPath;
 
 
+            } catch (BusinessException e) {
+                throw e;
             } catch (Exception e) {
                 log.error(e.getMessage());
                 throw new BusinessException(ErrorCodeConstant.UNKNOWN_ERROR,ErrorConstant.UNKNOWN_ERROR);
             }
         } catch (BusinessException e) {
             if(e.getCode() == ErrorCodeConstant.FILE_NOT_FOUND){
-                // 保存处理失败文件到数据库
+                // 保存处理失败任务到文件
                 gradingTask.setStatus(4);
                 gradingTask.setErrorMessage(e.getMessage());
                 gradingTask.setRetryCount(0);
                 gradingTask.setFinishTime(LocalDateTime.now());
-                gradingTaskMapper.insert(gradingTask);
+                try {
+                    FileUtil.ensureDirExists(taskDir);
+                    FileUtil.writeJson(taskDir + File.separator + gradingTask.getId() + ".json", gradingTask);
+                } catch (Exception ex) {
+                    log.error("保存失败任务文件异常: {}", ex.getMessage());
+                }
             }
             throw e;
         }catch (Exception e) {

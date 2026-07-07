@@ -14,12 +14,12 @@ module com.javascene.gradingfx {
     requires com.fasterxml.jackson.core;
     requires static lombok;
     requires org.apache.commons.io;
-    requires ch.qos.logback.classic;
     requires org.slf4j;
 
     opens com.javascene.gradingfx.config.property to org.yaml.snakeyaml;
     opens com.javascene.gradingfx to javafx.fxml;
     exports com.javascene.gradingfx;
     opens com.javascene.gradingfx.controller to javafx.fxml;
-    opens com.javascene.gradingfx.model to javafx.base;
+    opens com.javascene.gradingfx.model to javafx.base, com.fasterxml.jackson.databind;
+    opens com.javascene.gradingfx.config.bean to com.fasterxml.jackson.databind;
 }
