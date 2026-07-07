@@ -14,6 +14,8 @@ module com.javascene.gradingfx {
     requires com.fasterxml.jackson.core;
     requires static lombok;
     requires org.apache.commons.io;
+    requires ch.qos.logback.classic;
+    requires org.slf4j;
 
     opens com.javascene.gradingfx.config.property to org.yaml.snakeyaml;
     opens com.javascene.gradingfx to javafx.fxml;

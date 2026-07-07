@@ -3,10 +3,17 @@ package com.javascene.gradingfx.service.Impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.javascene.gradingfx.config.bean.DifyClient;
+import com.javascene.gradingfx.config.property.PythonConfig;
+import com.javascene.gradingfx.constant.ErrorMessageConstant;
+import com.javascene.gradingfx.exception.BusinessException;
+import com.javascene.gradingfx.model.StudentHomework;
 import com.javascene.gradingfx.service.ReviewService;
+import com.javascene.gradingfx.util.ConfigLoader;
 import com.javascene.gradingfx.util.ZipUtil;
 import org.apache.commons.io.FileUtils;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -21,6 +28,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class ReviewServiceImpl implements ReviewService {
+    private final Logger log = LoggerFactory.getLogger(ReviewServiceImpl.class);
+    private final DifyClient difyClient = new DifyClient(ConfigLoader.getConfig().getDify().getApi().getBaseUrl());
+
     private final ObjectMapper mapper =  new ObjectMapper();
 
     //匹配学号和姓名
@@ -125,6 +135,9 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     public Map<String, List<String>> wordConvertToMd(List<String> fileUrls) {
         log.info("开始转换Word文档为Markdown格式");
+        PythonConfig python = ConfigLoader.getConfig().getPython();
+        String pythonExe = python.getExe();
+        String pythonScriptPath = python.getScript().getDocxToMdPath();
         try {
             //结果集
             List<String> results = new ArrayList<>();
@@ -179,17 +192,20 @@ public class ReviewServiceImpl implements ReviewService {
         Path tempFile = null;
         // 校验输入参数
         if (null == difyResponseJson || difyResponseJson.isEmpty()) {
-            throw new ServerDocumentParsingException(ErrorConstant.MD_CONTENT_EMPTY);
+            throw new BusinessException(ErrorMessageConstant.MD_CONTENT_EMPTY);
         }
         log.info(difyResponseJson);
 
         String outputJson = extractOutputAsJson(difyResponseJson);
         // 校验outputJson是否为空
         if(outputJson == null){
-            throw new ServerDocumentParsingException(ErrorConstant.MD_CONTENT_INVALID);
+            throw new BusinessException(ErrorMessageConstant.MD_CONTENT_INVALID);
         }
 
-
+        PythonConfig python = ConfigLoader.getConfig().getPython();
+        String pythonExe = python.getExe();
+        String mdToDocxScriptPath = python.getScript().getMdToDocxPath();
+        String tempWord = ConfigLoader.getConfig().getFile().getWordPath();
         try {
             //在系统默认临时目录下创建一个临时文件
             //前缀是 "dify_review_"，后缀是 ".json"
@@ -254,7 +270,7 @@ public class ReviewServiceImpl implements ReviewService {
         try{
             JsonNode root = mapper.readTree(outputJson);
             if (!root.has("output")) {
-                throw new ServerDocumentParsingException(ErrorConstant.MD_CONTENT_INVALID);
+                throw new BusinessException(ErrorMessageConstant.MD_CONTENT_INVALID);
             }
             JsonNode dataNode = root.get("output");
             if(dataNode.isArray()){
@@ -334,7 +350,7 @@ public class ReviewServiceImpl implements ReviewService {
         // 调用Dify工作流
         // 检查文件路径列表是否为空
         if (fileUrls.isEmpty()) {
-            throw new FilesNotFoundException(ErrorConstant.FILES_NOT_FOUND);}
+            throw new BusinessException(ErrorMessageConstant.FILES_NOT_FOUND);}
         Map<String, Object> requestBody  = new HashMap<>();
         if (null != rubric && !rubric.isEmpty()) {
             requestBody.put("rubric", rubric);
