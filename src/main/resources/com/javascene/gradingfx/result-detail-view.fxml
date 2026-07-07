@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<AnchorPane xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.javascene.gradingfx.controller.ResultDetailController"
+            stylesheets="@styles.css"
+            prefWidth="600" prefHeight="500">
+
+    <VBox spacing="16" AnchorPane.topAnchor="0" AnchorPane.bottomAnchor="0"
+          AnchorPane.leftAnchor="0" AnchorPane.rightAnchor="0"
+          style="-fx-padding: 20;">
+
+        <!-- Student info header -->
+        <VBox styleClass="card" spacing="8">
+            <HBox alignment="CENTER_LEFT" spacing="20">
+                <VBox>
+                    <Label fx:id="studentNameLabel" text="张三" styleClass="title"
+                           style="-fx-text-fill: #4F46E5;"/>
+                    <Label fx:id="studentIdLabel" text="2021001" styleClass="secondary"/>
+                </VBox>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Label fx:id="aiScoreLabel" text="85" style="-fx-font-size: 32px; -fx-font-weight: 700; -fx-text-fill: #10B981;"/>
+                <Label text="分" style="-fx-font-size: 16px; -fx-text-fill: #64748B;"/>
+            </HBox>
+        </VBox>
+
+        <!-- AI review section -->
+        <VBox VBox.vgrow="ALWAYS" spacing="8">
+            <Label text="AI 批阅结果" styleClass="subtitle"/>
+            <TextArea fx:id="aiCommentArea" wrapText="true" editable="false"
+                      VBox.vgrow="ALWAYS"
+                      style="-fx-background-color: #F8FAFC;"/>
+        </VBox>
+
+        <!-- Separator -->
+        <Separator/>
+
+        <!-- Teacher review section -->
+        <VBox VBox.vgrow="ALWAYS" spacing="8">
+            <Label text="教师复核（人机共评）" styleClass="subtitle"/>
+
+            <GridPane hgap="12" vgap="8">
+                <!-- Score input -->
+                <Label text="复核得分:" GridPane.rowIndex="0" GridPane.columnIndex="0"
+                       styleClass="secondary"/>
+                <HBox spacing="8" alignment="CENTER_LEFT" GridPane.rowIndex="0" GridPane.columnIndex="1">
+                    <TextField fx:id="teacherScoreField" prefWidth="80" promptText="0-100"/>
+                    <Label text="分" styleClass="secondary"/>
+                </HBox>
+
+                <!-- Comment -->
+                <Label text="教师评语:" GridPane.rowIndex="1" GridPane.columnIndex="0"
+                       styleClass="secondary"/>
+                <TextArea fx:id="teacherCommentArea" wrapText="true" prefHeight="80"
+                          GridPane.rowIndex="1" GridPane.columnIndex="1"
+                          promptText="输入教师评语..."/>
+
+                <!-- Notes -->
+                <Label text="教师备注:" GridPane.rowIndex="2" GridPane.columnIndex="0"
+                       styleClass="secondary"/>
+                <TextArea fx:id="teacherNoteArea" wrapText="true" prefHeight="60"
+                          GridPane.rowIndex="2" GridPane.columnIndex="1"
+                          promptText="仅教师可见的内部备注..."/>
+            </GridPane>
+        </VBox>
+
+        <!-- Bottom buttons -->
+        <HBox spacing="12" alignment="CENTER_RIGHT">
+            <Button text="保存复核" fx:id="saveBtn" styleClass="primary-button"
+                    onAction="#handleSave"/>
+            <Button text="取消" fx:id="cancelBtn" styleClass="secondary-button"
+                    onAction="#handleCancel"/>
+        </HBox>
+
+    </VBox>
+
+</AnchorPane>

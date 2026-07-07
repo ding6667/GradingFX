@@ -1,0 +1,157 @@
+package com.javascene.gradingfx.util;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.util.List;
+
+/**
+ * 文件工具类，支持普通读写和JSON序列化读写
+ * 直接使用 Jackson 处理包含 JavaFX SimpleProperty 的对象（通过 getter/setter）
+ */
+public class FileUtil {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper()
+            .enable(SerializationFeature.INDENT_OUTPUT);
+
+    // ==================== 普通读写 ====================
+
+    /**
+     * 按行读取文件内容
+     */
+    public static List<String> readLines(String filePath) throws IOException {
+        return Files.readAllLines(Paths.get(filePath), StandardCharsets.UTF_8);
+    }
+
+    /**
+     * 读取文件全部内容为字符串
+     */
+    public static String readAll(String filePath) throws IOException {
+        return Files.readString(Paths.get(filePath), StandardCharsets.UTF_8);
+    }
+
+    /**
+     * 写入文本内容到文件（覆盖模式）
+     */
+    public static void write(String filePath, String content) throws IOException {
+        Files.writeString(Paths.get(filePath), content, StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+    }
+
+    /**
+     * 追加文本内容到文件
+     */
+    public static void append(String filePath, String content) throws IOException {
+        Files.writeString(Paths.get(filePath), content, StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+    }
+
+    /**
+     * 写入行列表到文件
+     */
+    public static void writeLines(String filePath, List<String> lines) throws IOException {
+        Files.write(Paths.get(filePath), lines, StandardCharsets.UTF_8);
+    }
+
+    // ==================== JSON 序列化读写 ====================
+
+    /**
+     * 将对象序列化为 JSON 并写入文件
+     */
+    public static <T> void writeJson(String filePath, T object) throws IOException {
+        MAPPER.writeValue(new File(filePath), object);
+    }
+
+    /**
+     * 将 List 序列化为 JSON 并写入文件
+     */
+    public static <T> void writeJsonList(String filePath, List<T> list) throws IOException {
+        MAPPER.writeValue(new File(filePath), list);
+    }
+    /**
+     * 从 JSON 文件读取并反序列化为指定类型
+     */
+    public static <T> T readJson(String filePath, Class<T> clazz) throws IOException {
+        return MAPPER.readValue(new File(filePath), clazz);
+    }
+
+    /**
+     * 从 JSON 文件读取并反序列化为 List
+     */
+    public static <T> List<T> readJsonList(String filePath, Class<T> elementClass) throws IOException {
+        return MAPPER.readValue(new File(filePath),
+                MAPPER.getTypeFactory().constructCollectionType(List.class, elementClass));
+    }
+
+    /**
+     * 从 JSON 文件读取并反序列化为指定 TypeReference（适用于泛型复杂类型）
+     */
+    public static <T> T readJson(String filePath, TypeReference<T> typeRef) throws IOException {
+        return MAPPER.readValue(new File(filePath), typeRef);
+    }
+
+    // ==================== 二进制序列化读写 ====================
+
+    /**
+     * 使用 Java 原生序列化写入对象（需实现 Serializable）
+     */
+    public static void writeObject(String filePath, Serializable object) throws IOException {
+        try (ObjectOutputStream oos = new ObjectOutputStream(
+                new FileOutputStream(filePath))) {
+            oos.writeObject(object);
+        }
+    }
+
+    /**
+     * 使用 Java 原生序列化读取对象
+     */
+    @SuppressWarnings("unchecked")
+    public static <T extends Serializable> T readObject(String filePath)
+            throws IOException, ClassNotFoundException {
+        try (ObjectInputStream ois = new ObjectInputStream(
+                new FileInputStream(filePath))) {
+            return (T) ois.readObject();
+        }
+    }
+
+    // ==================== 文件与目录操作 ====================
+
+    /**
+     * 确保目录存在
+     */
+    public static void ensureDirExists(String dirPath) throws IOException {
+        Files.createDirectories(Paths.get(dirPath));
+    }
+
+    /**
+     * 检查文件是否存在
+     */
+    public static boolean exists(String filePath) {
+        return Files.exists(Paths.get(filePath));
+    }
+
+    /**
+     * 删除文件
+     */
+    public static boolean delete(String filePath) throws IOException {
+        return Files.deleteIfExists(Paths.get(filePath));
+    }
+
+    /**
+     * 复制文件
+     */
+    public static void copy(String from, String to) throws IOException {
+        Files.copy(Paths.get(from), Paths.get(to), StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    /**
+     * 移动/重命名文件
+     */
+    public static void move(String from, String to) throws IOException {
+        Files.move(Paths.get(from), Paths.get(to), StandardCopyOption.REPLACE_EXISTING);
+    }
+}

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.javascene.gradingfx.controller.HistoryController"
+            stylesheets="@styles.css"
+            prefWidth="800" prefHeight="600">
+
+    <!-- Top: Title and refresh -->
+    <top>
+        <HBox alignment="CENTER_LEFT" spacing="20" styleClass="card">
+            <padding>
+                <Insets bottom="12" left="20" right="20" top="12"/>
+            </padding>
+            <Label text="历史批阅任务" styleClass="title"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button text="刷新" fx:id="refreshBtn" styleClass="secondary-button"
+                    onAction="#handleRefresh"/>
+        </HBox>
+    </top>
+
+    <!-- Center: History table -->
+    <center>
+        <VBox style="-fx-padding: 16;">
+            <TableView fx:id="historyTable" VBox.vgrow="ALWAYS">
+                <columns>
+                    <TableColumn fx:id="taskNameColumn" text="任务名称" prefWidth="250" sortable="true"/>
+                    <TableColumn fx:id="taskTimeColumn" text="批阅时间" prefWidth="180" sortable="true"/>
+                    <TableColumn fx:id="studentCountColumn" text="学生总数" prefWidth="100" sortable="true"/>
+                    <TableColumn fx:id="taskStatusColumn" text="完成状态" prefWidth="120" sortable="true"/>
+                    <TableColumn fx:id="operationColumn" text="操作" prefWidth="150" sortable="false"/>
+                </columns>
+                <columnResizePolicy>
+                    <TableView fx:constant="CONSTRAINED_RESIZE_POLICY"/>
+                </columnResizePolicy>
+            </TableView>
+        </VBox>
+    </center>
+
+    <!-- Bottom: Action buttons -->
+    <bottom>
+        <HBox alignment="CENTER_RIGHT" spacing="12" styleClass="card">
+            <padding>
+                <Insets bottom="12" left="20" right="20" top="12"/>
+            </padding>
+            <Button text="👁 查看结果" fx:id="viewResultBtn" styleClass="primary-button"
+                    onAction="#handleViewResult"/>
+            <Button text="重新导出" fx:id="reExportBtn" styleClass="secondary-button"
+                    onAction="#handleReExport"/>
+            <Button text="🗑 删除任务" fx:id="deleteTaskBtn" styleClass="danger-button"
+                    onAction="#handleDeleteTask"/>
+        </HBox>
+    </bottom>
+
+</BorderPane>

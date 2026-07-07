@@ -1,0 +1,22 @@
+app:
+  name: "作业智能批阅系统"
+  version: "1.0.0"
+dify:
+  api:
+    api-key: "app-h2yIzEsq6W2C5eHN0MtDVRt2"   # Dify应用的API密钥
+    base-url: "http://localhost:5001/v1" # Dify API服务的地址
+python:
+  exe: "E:python"
+  script:
+    md_to_docx_path: "src/main/java/com/javascene/gradingfx/pyscript/md_to_docx.py"
+    docx_to_md_path: "src/main/java/com/javascene/gradingfx/pyscript/docx_to_md.py"
+file:
+  zip_path: "src/main/java/com/javascene/gradingfx/file/zip"
+  unzip_path: "src/main/java/com/javascene/gradingfx/file/unzip"
+  temp_path: "src/main/java/com/javascene/gradingfx/file/temp"
+  word_path: "src/main/java/com/javascene/gradingfx/file/word"
+  excel_path: "src/main/java/com/javascene/gradingfx/file/excel"
+data:
+  task: "src/main/java/com/javascene/gradingfx/data/task"
+  result: "src/main/java/com/javascene/gradingfx/data/result"
+  standard: "src/main/java/com/javascene/gradingfx/data/standard"
