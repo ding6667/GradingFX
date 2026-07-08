@@ -17,6 +17,7 @@ file:
   word_path: "src/main/java/com/javascene/gradingfx/file/word"
   excel_path: "src/main/java/com/javascene/gradingfx/file/excel"
 data:
-  task: "src/main/java/com/javascene/gradingfx/data/task"
+  task: "src/main/java/com/javascene/gradingfx/data/task"  # 单个学生任务数据存储路径，该表存放的是一个zip文件下的所有批阅记录
+  total_task: "src/main/java/com/javascene/gradingfx/data/total_task"  # 所有学生任务数据存储路径，记录所有zip文件的总数据
   result: "src/main/java/com/javascene/gradingfx/data/result"
   standard: "src/main/java/com/javascene/gradingfx/data/standard"

@@ -1,6 +1,6 @@
 package com.javascene.gradingfx.controller;
 
-import com.javascene.gradingfx.model.StudentResult;
+import com.javascene.gradingfx.model.StudentResultProperty;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 
@@ -16,13 +16,13 @@ public class ResultDetailController {
     @FXML private Button saveBtn;
     @FXML private Button cancelBtn;
 
-    private StudentResult currentResult;
+    private StudentResultProperty currentResult;
 
     @FXML
     public void initialize() {
     }
 
-    public void setStudentResult(StudentResult result) {
+    public void setStudentResult(StudentResultProperty result) {
         this.currentResult = result;
         if (result != null) {
             studentNameLabel.setText(result.getName());

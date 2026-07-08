@@ -30,13 +30,33 @@
             <!-- Upload area -->
             <Label text="上传文件" styleClass="subtitle"/>
             <StackPane fx:id="uploadArea" styleClass="upload-area"
-                       VBox.vgrow="NEVER" prefHeight="120">
+                       VBox.vgrow="NEVER" prefHeight="120"
+                       onDragOver="#handleDragOver"
+                       onDragDropped="#handleDrop"
+                       onDragEntered="#handleDragEntered"
+                       onDragExited="#handleDragExited"
+                       onMouseClicked="#handleUploadClick">
                 <VBox alignment="CENTER" spacing="4">
                     <Label text="📄" style="-fx-font-size: 28px;"/>
                     <Label text="拖拽 ZIP 包至此" wrapText="true" style="-fx-font-size: 12px;"/>
                     <Label text="或点击选择文件" styleClass="secondary" style="-fx-font-size: 11px;"/>
                 </VBox>
             </StackPane>
+
+            <!-- Selected files area -->
+            <VBox fx:id="selectedFilesArea" styleClass="card" VBox.vgrow="NEVER" visible="false" managed="false"
+                  style="-fx-min-height: 120px;">
+                <padding><Insets top="10" right="12" bottom="10" left="12"/></padding>
+                <spacing>6</spacing>
+                <HBox alignment="CENTER_LEFT" spacing="8">
+                    <Label text="📎 已选中文件" style="-fx-font-size: 13px; -fx-font-weight: 600;"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Button text="清除" fx:id="clearFilesBtn" styleClass="secondary-button"
+                            onAction="#handleClearFiles" style="-fx-font-size: 12px; -fx-padding: 4px 10px;"/>
+                </HBox>
+                <ListView fx:id="selectedFilesList" prefHeight="80" VBox.vgrow="ALWAYS"
+                          style="-fx-font-size: 12px;"/>
+            </VBox>
 
             <!-- Student tree -->
             <Label text="学生列表" styleClass="subtitle"/>
@@ -95,11 +115,13 @@
             <VBox VBox.vgrow="ALWAYS">
                 <TableView fx:id="resultTable" VBox.vgrow="ALWAYS">
                     <columns>
-                        <TableColumn fx:id="idColumn" text="学号" prefWidth="120" sortable="true"/>
-                        <TableColumn fx:id="nameColumn" text="姓名" prefWidth="80" sortable="true"/>
-                        <TableColumn fx:id="scoreColumn" text="得分" prefWidth="80" sortable="true"/>
-                        <TableColumn fx:id="commentColumn" text="评语缩略" prefWidth="300" sortable="false"/>
-                        <TableColumn fx:id="statusColumn" text="状态" prefWidth="120" sortable="true"/>
+                        <TableColumn fx:id="studentIdColumn" text="学号" prefWidth="100" sortable="true"/>
+                        <TableColumn fx:id="studentNameColumn" text="姓名" prefWidth="80" sortable="true"/>
+                        <TableColumn fx:id="rawScoreColumn" text="AI评分" prefWidth="70" sortable="true"/>
+                        <TableColumn fx:id="aiCommentColumn" text="AI评语" prefWidth="200" sortable="false"/>
+                        <TableColumn fx:id="teacherScoreColumn" text="教师评分" prefWidth="80" sortable="true"/>
+                        <TableColumn fx:id="teacherCommentColumn" text="教师评语" prefWidth="200" sortable="false"/>
+                        <TableColumn fx:id="teacherNoteColumn" text="教师备注" prefWidth="150" sortable="false"/>
                     </columns>
                     <columnResizePolicy>
                         <TableView fx:constant="CONSTRAINED_RESIZE_POLICY"/>

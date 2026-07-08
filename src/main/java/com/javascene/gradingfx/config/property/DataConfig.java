@@ -7,4 +7,5 @@ public class DataConfig {
     private String task;
     private String result;
     private String standard;
+    private String totalTask;
 }

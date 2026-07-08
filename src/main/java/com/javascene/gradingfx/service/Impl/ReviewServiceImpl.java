@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.javascene.gradingfx.config.bean.DifyClient;
 import com.javascene.gradingfx.config.property.AppConfig;
 import com.javascene.gradingfx.config.property.DataConfig;
-import com.javascene.gradingfx.config.property.FileConfig;
 import com.javascene.gradingfx.config.property.PythonConfig;
 import com.javascene.gradingfx.constant.ErrorConstant;
 import com.javascene.gradingfx.constant.ErrorCodeConstant;
@@ -16,7 +15,7 @@ import com.javascene.gradingfx.exception.ServerDocumentParsingException;
 import com.javascene.gradingfx.model.GradingResult;
 import com.javascene.gradingfx.model.GradingTask;
 import com.javascene.gradingfx.model.StudentHomework;
-import com.javascene.gradingfx.model.StudentScore;
+import com.javascene.gradingfx.model.StudentResult;
 import com.javascene.gradingfx.service.ReviewService;
 import com.javascene.gradingfx.util.ConfigLoader;
 import com.javascene.gradingfx.util.FileUtil;
@@ -465,10 +464,10 @@ public class ReviewServiceImpl implements ReviewService {
                 String excelPath = excelResult != null ? excelResult.get("excelPath") : null;
 
                 // 构建并持久化学生成绩
-                List<StudentScore> scores = new ArrayList<>();
+                List<StudentResult> scores = new ArrayList<>();
                 for (Map.Entry<String, Object> entry : json.entrySet()) {
                     if (entry.getValue() instanceof List<?> list && list.size() >= 2) {
-                        StudentScore score = new StudentScore();
+                        StudentResult score = new StudentResult();
                         score.setTaskId(gradingTask.getId());
                         score.setStudentId(entry.getKey());
                         score.setStudentName(String.valueOf(list.get(0)));
@@ -481,8 +480,8 @@ public class ReviewServiceImpl implements ReviewService {
                 FileUtil.ensureDirExists(resultDir);
                 String scoresPath = resultDir + File.separator + "scores.json";
                 synchronized (FILE_LOCK) {
-                    List<StudentScore> existingScores = FileUtil.exists(scoresPath)
-                            ? FileUtil.readJsonList(scoresPath, StudentScore.class) : new ArrayList<>();
+                    List<StudentResult> existingScores = FileUtil.exists(scoresPath)
+                            ? FileUtil.readJsonList(scoresPath, StudentResult.class) : new ArrayList<>();
                     existingScores.addAll(scores);
                     FileUtil.writeJsonList(scoresPath, existingScores);
                 }

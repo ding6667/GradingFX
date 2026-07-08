@@ -2,6 +2,7 @@ package com.javascene.gradingfx.service.Impl;
 
 import com.javascene.gradingfx.config.property.DataConfig;
 import com.javascene.gradingfx.enmu.HistoryStatus;
+import com.javascene.gradingfx.enmu.ReviewStatus;
 import com.javascene.gradingfx.model.*;
 import com.javascene.gradingfx.service.HistoryService;
 import com.javascene.gradingfx.util.ConfigLoader;
@@ -50,16 +51,16 @@ public class HistoryServiceImpl implements HistoryService {
     }
 
     @Override
-    public List<StudentResult> loadStudentResults(String taskId) {
+    public List<StudentResultProperty> loadStudentResults(String taskId) {
         String path = getScoreFilePath();
         if (!FileUtil.exists(path)) {
             return Collections.emptyList();
         }
         try {
-            List<StudentScore> scores = FileUtil.readJsonList(path, StudentScore.class);
+            List<StudentResult> scores = FileUtil.readJsonList(path, StudentResult.class);
             return scores.stream()
                     .filter(s -> taskId.equals(s.getTaskId()))
-                    .map(this::toStudentResult)
+                    .map(this::toStudentResultProperty)
                     .collect(Collectors.toList());
         } catch (Exception e) {
             log.error("读取学生成绩失败: {}", e.getMessage());
@@ -90,9 +91,16 @@ public class HistoryServiceImpl implements HistoryService {
         );
     }
 
-    private StudentResult toStudentResult(StudentScore s) {
-        String status = s.getStatus() != null ? s.getStatus() : "PROCESSING";
-        return new StudentResult(
+    private StudentResultProperty toStudentResultProperty(StudentResult s) {
+        String statusStr = s.getStatus() != null ? s.getStatus() : "PENDING";
+        ReviewStatus rs;
+        try {
+            rs = ReviewStatus.valueOf(statusStr);
+        } catch (IllegalArgumentException e) {
+            rs = ReviewStatus.PENDING;
+        }
+        return new StudentResultProperty(
+                s.getTaskId(),
                 s.getStudentId(),
                 s.getStudentName(),
                 s.getRawScore(),
@@ -100,7 +108,7 @@ public class HistoryServiceImpl implements HistoryService {
                 s.getTeacherScore(),
                 s.getTeacherComment(),
                 s.getTeacherNote(),
-                status,
+                rs,
                 s.getErrorMessage()
         );
     }

@@ -2,7 +2,7 @@ package com.javascene.gradingfx.service;
 
 import com.javascene.gradingfx.model.GradingResult;
 import com.javascene.gradingfx.model.GradingTask;
-import com.javascene.gradingfx.model.StudentScore;
+import com.javascene.gradingfx.model.StudentResult;
 import com.javascene.gradingfx.util.FileUtil;
 import org.junit.jupiter.api.*;
 
@@ -153,7 +153,7 @@ class StorageLogicTest {
         assertEquals(LocalDateTime.of(2026, 7, 14, 14, 35, 0), results.get(0).getExpireTime());
     }
 
-    // ========== 4. StudentScore 批量写入 ==========
+    // ========== 4. StudentResult 批量写入 ==========
 
     @Test
     @DisplayName("scores.json 批量追加学生成绩，多次批阅不覆盖")
@@ -161,9 +161,9 @@ class StorageLogicTest {
         String path = tempDir.resolve("scores.json").toString();
 
         // 第一次批阅：3个学生
-        List<StudentScore> batch1 = new ArrayList<>();
+        List<StudentResult> batch1 = new ArrayList<>();
         for (int i = 1; i <= 3; i++) {
-            StudentScore s = new StudentScore();
+            StudentResult s = new StudentResult();
             s.setTaskId("task-001");
             s.setStudentId("2021000" + i);
             s.setStudentName("学生" + i);
@@ -174,15 +174,15 @@ class StorageLogicTest {
         }
 
         // 写入第一批
-        List<StudentScore> existing = FileUtil.exists(path)
-                ? FileUtil.readJsonList(path, StudentScore.class) : new ArrayList<>();
+        List<StudentResult> existing = FileUtil.exists(path)
+                ? FileUtil.readJsonList(path, StudentResult.class) : new ArrayList<>();
         existing.addAll(batch1);
         FileUtil.writeJsonList(path, existing);
 
         // 第二次批阅：2个学生
-        List<StudentScore> batch2 = new ArrayList<>();
+        List<StudentResult> batch2 = new ArrayList<>();
         for (int i = 4; i <= 5; i++) {
-            StudentScore s = new StudentScore();
+            StudentResult s = new StudentResult();
             s.setTaskId("task-002");
             s.setStudentId("2021000" + i);
             s.setStudentName("学生" + i);
@@ -194,12 +194,12 @@ class StorageLogicTest {
 
         // 写入第二批
         existing = FileUtil.exists(path)
-                ? FileUtil.readJsonList(path, StudentScore.class) : new ArrayList<>();
+                ? FileUtil.readJsonList(path, StudentResult.class) : new ArrayList<>();
         existing.addAll(batch2);
         FileUtil.writeJsonList(path, existing);
 
         // 验证总数
-        List<StudentScore> all = FileUtil.readJsonList(path, StudentScore.class);
+        List<StudentResult> all = FileUtil.readJsonList(path, StudentResult.class);
         assertEquals(5, all.size(), "两次批阅共5条成绩");
 
         // 验证按 taskId 过滤
@@ -209,7 +209,7 @@ class StorageLogicTest {
         assertEquals(2, task2Count, "task-002 有2条");
 
         // 验证字段完整性
-        StudentScore first = all.get(0);
+        StudentResult first = all.get(0);
         assertEquals("task-001", first.getTaskId());
         assertEquals("20210001", first.getStudentId());
         assertEquals("学生1", first.getStudentName());
@@ -257,7 +257,7 @@ class StorageLogicTest {
     void testChineseContentSerialization() throws IOException {
         String path = tempDir.resolve("chinese.json").toString();
 
-        StudentScore s = new StudentScore();
+        StudentResult s = new StudentResult();
         s.setTaskId("task-cn");
         s.setStudentId("20210099");
         s.setStudentName("张三丰");
@@ -269,7 +269,7 @@ class StorageLogicTest {
         s.setErrorMessage(null);
 
         FileUtil.writeJson(path, s);
-        StudentScore loaded = FileUtil.readJson(path, StudentScore.class);
+        StudentResult loaded = FileUtil.readJson(path, StudentResult.class);
 
         assertEquals("张三丰", loaded.getStudentName());
         assertTrue(loaded.getAiComment().contains("时间复杂度为O(nlogn)"));
