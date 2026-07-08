@@ -29,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
@@ -642,6 +643,23 @@ public class ReviewServiceImpl implements ReviewService {
             FileUtil.ensureDirExists(taskDir);
             appendToJsonList(taskDir, task, GradingTask.class);
 
+            // 创建 GradingResult 并写入 results.json
+            GradingResult gradingResult = new GradingResult();
+            gradingResult.setTaskId(taskId);
+            gradingResult.setStatus(1); // 处理中
+            gradingResult.setCreateTime(LocalDateTime.now());
+            gradingResult.setScoreChanged(0);
+            try {
+                String resultsPath = getResultsJsonPath();
+                File parentDir = new File(resultsPath).getParentFile();
+                if (parentDir != null) {
+                    FileUtil.ensureDirExists(parentDir.getAbsolutePath());
+                }
+                appendToJsonList(resultsPath, gradingResult, GradingResult.class);
+            } catch (IOException e) {
+                log.error("写入 GradingResult 失败: {}", e.getMessage());
+            }
+
             startBatchReview(students, taskId, rubric, callback);
             return taskId;
 
@@ -755,6 +773,13 @@ public class ReviewServiceImpl implements ReviewService {
             // ===== 全部完成 =====
             log.info("批阅全部完成: taskId={}, 已完成={}, 失败={}", currentTaskId, completedCount, failedCount);
             updateGradingTaskStatus(currentTaskId, GradingTask.STATUS_SUCCESS);
+            // 更新 GradingResult 状态为成功
+            GradingResult gr = findGradingResult(currentTaskId);
+            if (gr != null) {
+                gr.setStatus(0);
+                gr.setExpireTime(LocalDateTime.now().plusDays(7));
+                updateGradingResult(gr);
+            }
             if (currentCallback != null) {
                 currentCallback.onReviewFinished(new ArrayList<>(currentStudents));
             }
@@ -945,6 +970,8 @@ public class ReviewServiceImpl implements ReviewService {
                     File dstWord = new File(dir + File.separator + "summary.docx");
                     FileUtils.copyFile(srcWord, dstWord);
                     log.info("Word 文档已生成: {}", dstWord.getAbsolutePath());
+                    // 将 Word 路径写入 GradingResult
+                    updateGradingResultWordPath(taskId, dstWord.getAbsolutePath());
                 }
             }
         } catch (Exception e) {
@@ -1048,13 +1075,65 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     public String exportExcel(String taskId) {
-        // 从轻量 JSON 读取最新成绩（不含 wordContent，加载快）
+        String dir = getResultDir(taskId);
+        try {
+            FileUtil.ensureDirExists(dir);
+        } catch (IOException e) {
+            log.error("创建结果目录失败: {}", e.getMessage());
+        }
+        String excelPath = dir + File.separator + "summary.xlsx";
+
+        // 从 results.json 读取 GradingResult，判断 scoreChanged
+        GradingResult gr = findGradingResult(taskId);
+        if (gr != null && gr.getScoreChanged() == 0
+                && gr.getExcelPath() != null && !gr.getExcelPath().isEmpty()
+                && new File(gr.getExcelPath()).exists()) {
+            // 评分未变更且 Excel 已存在，直接返回路径
+            log.info("评分未变更，直接使用已生成的 Excel: {}", gr.getExcelPath());
+            return copyToExportPath(gr.getExcelPath(), taskId, "xlsx");
+        }
+
+        // 评分已变更或 Excel 尚未生成，重新生成
         List<StudentResult> students = studentRepository.loadByTaskId(taskId);
         if (students.isEmpty()) {
             log.warn("导出 Excel 失败：未找到任务数据 taskId={}", taskId);
             return null;
         }
+        exportService.exportExcel(students, excelPath);
+        log.info("Excel 已重新生成: {} (共 {} 条)", excelPath, students.size());
 
+        // 更新 GradingResult：写入 excelPath，重置 scoreChanged
+        if (gr != null) {
+            gr.setExcelPath(excelPath);
+            gr.setScoreChanged(0);
+            updateGradingResult(gr);
+        }
+        return copyToExportPath(excelPath, taskId, "xlsx");
+    }
+
+    @Override
+    public void markScoreChanged(String taskId) {
+        GradingResult gr = findGradingResult(taskId);
+        if (gr != null) {
+            gr.setScoreChanged(1);
+            updateGradingResult(gr);
+            log.info("已标记评分变更: taskId={}", taskId);
+        } else {
+            log.warn("未找到 GradingResult，无法标记评分变更: taskId={}", taskId);
+        }
+    }
+
+    @Override
+    public String exportWord(String taskId) {
+        // 优先返回已生成的 Word 路径
+        GradingResult gr = findGradingResult(taskId);
+        if (gr != null && gr.getWordPath() != null && !gr.getWordPath().isEmpty()
+                && new File(gr.getWordPath()).exists()) {
+            log.info("Word 已存在，直接返回: {}", gr.getWordPath());
+            return copyToExportPath(gr.getWordPath(), taskId, "docx");
+        }
+
+        // Word 尚未生成或文件丢失，重新生成
         String dir = getResultDir(taskId);
         try {
             FileUtil.ensureDirExists(dir);
@@ -1062,10 +1141,44 @@ public class ReviewServiceImpl implements ReviewService {
             log.error("创建结果目录失败: {}", e.getMessage());
         }
 
-        String excelPath = dir + File.separator + "summary.xlsx";
-        exportService.exportExcel(students, excelPath);
-        log.info("Excel 已导出: {} (共 {} 条)", excelPath, students.size());
-        return excelPath;
+        List<StudentResult> students = studentRepository.loadByTaskId(taskId);
+        if (students.isEmpty()) {
+            log.warn("导出 Word 失败：未找到任务数据 taskId={}", taskId);
+            return null;
+        }
+
+        try {
+            List<String> reviews = new ArrayList<>();
+            for (StudentResult s : students) {
+                if (s.getAiComment() != null && !s.getAiComment().isEmpty()) {
+                    reviews.add(s.getAiComment());
+                }
+            }
+            if (reviews.isEmpty()) {
+                log.warn("没有可用的批语用于生成 Word");
+                return null;
+            }
+            JsonNode outputNode = mapper.valueToTree(reviews);
+            ObjectNode resultJson = mapper.createObjectNode();
+            resultJson.set("output", outputNode);
+            String wordJsonStr = mapper.writeValueAsString(resultJson);
+            String wordPath = mdConvertToWord(wordJsonStr).get("wordPath");
+            if (wordPath != null && !wordPath.isEmpty()) {
+                File srcWord = new File(wordPath);
+                File dstWord = new File(dir + File.separator + "summary.docx");
+                FileUtils.copyFile(srcWord, dstWord);
+                log.info("Word 文档已重新生成: {}", dstWord.getAbsolutePath());
+                // 更新 GradingResult 的 wordPath
+                if (gr != null) {
+                    gr.setWordPath(dstWord.getAbsolutePath());
+                    updateGradingResult(gr);
+                }
+                return copyToExportPath(dstWord.getAbsolutePath(), taskId, "docx");
+            }
+        } catch (Exception e) {
+            log.error("重新生成 Word 文档失败: {}", e.getMessage(), e);
+        }
+        return null;
     }
 
     // ==================== 辅助方法 ====================
@@ -1082,6 +1195,159 @@ public class ReviewServiceImpl implements ReviewService {
 
     private String getResultDir(String taskId) {
         return resultPath + File.separator + taskId;
+    }
+
+    // ==================== 导出路径配置 ====================
+
+    /**
+     * 加载导出路径配置
+     */
+    private ExportConfig loadExportConfig() {
+        try {
+            String configPath = ConfigLoader.getConfig().getData().getExportConfig();
+            if (configPath == null || !FileUtil.exists(configPath)) return null;
+            return FileUtil.readJson(configPath, ExportConfig.class);
+        } catch (IOException e) {
+            log.error("读取导出配置失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 从 totalTask.json 中按 taskId 获取任务名称
+     */
+    private String getTaskName(String taskId) {
+        try {
+            String taskFilePath = getTotalTaskFilePath();
+            if (FileUtil.exists(taskFilePath)) {
+                List<GradingTask> tasks = FileUtil.readJsonList(taskFilePath, GradingTask.class);
+                for (GradingTask t : tasks) {
+                    if (taskId.equals(t.getId())) {
+                        return t.getTaskName();
+                    }
+                }
+            }
+        } catch (IOException e) {
+            log.error("读取任务名称失败: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * 根据文件名模板构建导出文件名
+     * 支持变量: {date} 日期, {taskName} 任务名称
+     */
+    private String buildFileName(String template, String taskId, String extension) {
+        String name = (template != null && !template.isEmpty()) ? template : "summary";
+        // 替换变量
+        name = name.replace("{date}", LocalDate.now().toString());
+        String taskName = getTaskName(taskId);
+        name = name.replace("{taskName}", taskName != null ? taskName : "未命名");
+        // 确保扩展名
+        if (!name.endsWith("." + extension)) {
+            name = name + "." + extension;
+        }
+        // 文件名安全处理：替换非法字符
+        name = name.replaceAll("[\\\\/:*?\"<>|]", "_");
+        return name;
+    }
+
+    /**
+     * 将文件从系统路径复制到用户配置的导出路径
+     * 如果未配置导出路径，直接返回源路径
+     */
+    private String copyToExportPath(String sourcePath, String taskId, String extension) {
+        if (sourcePath == null || sourcePath.isEmpty()) return sourcePath;
+
+        ExportConfig config = loadExportConfig();
+        if (config == null || config.getOutputPath() == null || config.getOutputPath().isEmpty()) {
+            // 未配置导出路径，返回系统路径
+            return sourcePath;
+        }
+
+        String fileName = buildFileName(config.getFileNameTemplate(), taskId, extension);
+        String destPath = config.getOutputPath() + File.separator + fileName;
+
+        try {
+            FileUtil.ensureDirExists(config.getOutputPath());
+            FileUtils.copyFile(new File(sourcePath), new File(destPath));
+            log.info("文件已复制到导出路径: {}", destPath);
+            return destPath;
+        } catch (IOException e) {
+            log.error("复制到导出路径失败: {}", e.getMessage());
+            return sourcePath;
+        }
+    }
+
+    // ==================== GradingResult 管理 ====================
+
+    private String getResultsJsonPath() {
+        return ConfigLoader.getConfig().getData().getResult();
+    }
+
+    /**
+     * 从 results.json 中按 taskId 查找 GradingResult
+     */
+    private GradingResult findGradingResult(String taskId) {
+        synchronized (FILE_LOCK) {
+            try {
+                String resultsPath = getResultsJsonPath();
+                if (!FileUtil.exists(resultsPath)) return null;
+                List<GradingResult> results = FileUtil.readJsonList(resultsPath, GradingResult.class);
+                for (GradingResult r : results) {
+                    if (taskId.equals(r.getTaskId())) {
+                        return r;
+                    }
+                }
+            } catch (IOException e) {
+                log.error("读取 GradingResult 失败: {}", e.getMessage());
+            }
+            return null;
+        }
+    }
+
+    /**
+     * 更新 results.json 中的 GradingResult（按 taskId 匹配后整体替换）
+     */
+    private void updateGradingResult(GradingResult updated) {
+        synchronized (FILE_LOCK) {
+            try {
+                String resultsPath = getResultsJsonPath();
+                if (!FileUtil.exists(resultsPath)) return;
+                List<GradingResult> results = FileUtil.readJsonList(resultsPath, GradingResult.class);
+                for (int i = 0; i < results.size(); i++) {
+                    if (updated.getTaskId().equals(results.get(i).getTaskId())) {
+                        results.set(i, updated);
+                        break;
+                    }
+                }
+                FileUtil.writeJsonList(resultsPath, results);
+            } catch (IOException e) {
+                log.error("更新 GradingResult 失败: {}", e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 仅更新 GradingResult 的 wordPath 字段
+     */
+    private void updateGradingResultWordPath(String taskId, String wordPath) {
+        synchronized (FILE_LOCK) {
+            try {
+                String resultsPath = getResultsJsonPath();
+                if (!FileUtil.exists(resultsPath)) return;
+                List<GradingResult> results = FileUtil.readJsonList(resultsPath, GradingResult.class);
+                for (GradingResult r : results) {
+                    if (taskId.equals(r.getTaskId())) {
+                        r.setWordPath(wordPath);
+                        break;
+                    }
+                }
+                FileUtil.writeJsonList(resultsPath, results);
+            } catch (IOException e) {
+                log.error("更新 GradingResult wordPath 失败: {}", e.getMessage());
+            }
+        }
     }
 
     /**

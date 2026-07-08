@@ -66,6 +66,24 @@
     -fx-background-color: rgba(79, 70, 229, 0.15);
 }
 
+/* Disabled buttons — grayed out to indicate unavailable */
+.primary-button:disabled {
+    -fx-background-color: #C7D2FE;
+    -fx-text-fill: #94A3B8;
+    -fx-cursor: default;
+}
+.secondary-button:disabled {
+    -fx-background-color: #F1F5F9;
+    -fx-text-fill: #94A3B8;
+    -fx-border-color: #E2E8F0;
+    -fx-cursor: default;
+}
+.danger-button:disabled {
+    -fx-background-color: #FCA5A5;
+    -fx-text-fill: #94A3B8;
+    -fx-cursor: default;
+}
+
 .danger-button {
     -fx-background-color: #EF4444;
     -fx-text-fill: white;

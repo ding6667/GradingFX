@@ -57,6 +57,7 @@ public class MainController {
     @FXML private Button detailBtn;
     @FXML private Button exportExcelBtn;
     @FXML private Button exportWordBtn;
+    @FXML private Button exportConfigBtn;
     @FXML private Button standardBtn;
     @FXML private Button historyBtn;
 
@@ -81,6 +82,9 @@ public class MainController {
 
     /** 当前批阅任务ID */
     private String currentTaskId = null;
+
+    /** 当前是否暂停 */
+    private boolean isPaused = false;
 
 
     @FXML
@@ -108,6 +112,9 @@ public class MainController {
         });
 
         loadData();
+
+        // 初始状态：无文件，所有控制按钮禁用
+        updateButtonStates(false, false);
     }
 
     private void loadData() {
@@ -164,6 +171,10 @@ public class MainController {
         root.getChildren().addAll(pendingItem, completedItem, failedItem);
         studentTree.setRoot(root);
         studentTree.setShowRoot(false);
+    }
+
+    @FXML void handleOpenExportConfig() {
+        showView("export-config-view.fxml", "导出路径配置", o -> {});
     }
 
     @FXML void handleOpenStandard() {
@@ -224,12 +235,14 @@ public class MainController {
     @FXML void handleClearFiles() {
         selectedFileObjects.clear();
         updateSelectedFilesArea();
+        updateButtonStates(reviewService.isReviewRunning(), isPaused);
     }
 
     private void handleSelectedFile(File file) {
         if (!selectedFileObjects.contains(file)) {
             selectedFileObjects.add(file);
             updateSelectedFilesArea();
+            updateButtonStates(reviewService.isReviewRunning(), isPaused);
             System.out.println("已选择文件: " + file.getAbsolutePath());
         }
     }
@@ -286,6 +299,7 @@ public class MainController {
         progressBar.setProgress(0);
         progressLabel.setText("准备中...");
 
+        isPaused = false;
         updateButtonStates(true, false);
 
         // 启动批阅（service 内部创建调度线程，非阻塞）
@@ -294,11 +308,13 @@ public class MainController {
 
     @FXML void handlePause() {
         reviewService.pauseReview();
+        isPaused = true;
         updateButtonStates(true, true);
     }
 
     @FXML void handleResume() {
         reviewService.resumeReview();
+        isPaused = false;
         updateButtonStates(true, false);
     }
 
@@ -313,6 +329,7 @@ public class MainController {
         }
 
         String rubric = standardService.getCurrentStandard();
+        isPaused = false;
         updateButtonStates(true, false);
         reviewService.retryFailed(currentTaskId, rubric, createProgressCallback());
     }
@@ -351,6 +368,7 @@ public class MainController {
                 Platform.runLater(() -> {
                     progressBar.setProgress(1.0);
                     progressLabel.setText("批阅完成");
+                    isPaused = false;
                     updateButtonStates(false, false);
 
                     // 刷新整个表格
@@ -367,6 +385,7 @@ public class MainController {
             public void onReviewError(String error) {
                 Platform.runLater(() -> {
                     progressLabel.setText("批阅异常: " + error);
+                    isPaused = false;
                     updateButtonStates(false, false);
                     AlertUtil.showError("批阅异常: " + error);
                     refresh();
@@ -416,12 +435,17 @@ public class MainController {
 
     /**
      * 更新按钮状态
+     * @param running 是否正在批阅
+     * @param paused 是否暂停
      */
     private void updateButtonStates(boolean running, boolean paused) {
-        startBtn.setDisable(running);
-        pauseBtn.setDisable(!running || paused);
-        resumeBtn.setDisable(!paused);
-        retryBtn.setDisable(running);
+        boolean hasFile = !selectedFileObjects.isEmpty();
+
+        // 未上传文件时所有控制按钮禁用
+        startBtn.setDisable(!hasFile || running);
+        pauseBtn.setDisable(!hasFile || !running || paused);
+        resumeBtn.setDisable(!hasFile || !paused);
+        retryBtn.setDisable(!hasFile || running || currentTaskId == null);
     }
 
     @FXML void handleViewDetail() {
@@ -445,7 +469,15 @@ public class MainController {
     }
 
     @FXML void handleExportWord() {
-
+        if (currentTaskId == null) {
+            return;
+        }
+        String path = reviewService.exportWord(currentTaskId);
+        if (path != null) {
+            AlertUtil.showInfo("Word 导出成功", "文件路径: " + path);
+        } else {
+            AlertUtil.showError("导出失败，未找到任务数据");
+        }
     }
 
     // 弹窗显示视图并刷新数据

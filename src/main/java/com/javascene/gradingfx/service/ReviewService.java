@@ -67,10 +67,25 @@ public interface ReviewService {
 
     /**
      * 按需导出 Excel：从轻量 JSON 读取最新成绩，生成 Excel 文件
+     * 如果评分未变更（scoreChanged=0）且 Excel 已存在，直接返回路径；
+     * 如果评分已变更（scoreChanged=1），重新生成 Excel 并重置标记
      * @param taskId 任务 ID
      * @return 生成的 Excel 文件路径，失败返回 null
      */
     String exportExcel(String taskId);
+
+    /**
+     * 标记评分已变更（教师在 UI 上修改了评分后调用）
+     * @param taskId 任务 ID
+     */
+    void markScoreChanged(String taskId);
+
+    /**
+     * 导出 Word：返回已生成的 Word 文件路径，若不存在则尝试重新生成
+     * @param taskId 任务 ID
+     * @return Word 文件路径，失败返回 null
+     */
+    String exportWord(String taskId);
 
     /**
      * 从 zip 提取学生作业列表

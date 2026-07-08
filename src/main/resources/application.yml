@@ -23,3 +23,4 @@ data:
   result: "src/main/java/com/javascene/gradingfx/data/results.json"
   standard: "src/main/java/com/javascene/gradingfx/data/standard"
   currentStandard: "src/main/java/com/javascene/gradingfx/data/currentStandard.json"
+  exportConfig: "src/main/java/com/javascene/gradingfx/data/exportConfig.json"
