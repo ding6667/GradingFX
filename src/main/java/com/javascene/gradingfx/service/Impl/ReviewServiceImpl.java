@@ -17,6 +17,7 @@ import com.javascene.gradingfx.service.ReviewService;
 import com.javascene.gradingfx.util.ConfigLoader;
 import com.javascene.gradingfx.util.FileUtil;
 import com.javascene.gradingfx.util.ZipUtil;
+import com.javascene.gradingfx.repository.StudentResultRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 
@@ -30,6 +31,8 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -43,6 +46,27 @@ public class ReviewServiceImpl implements ReviewService {
     private final String tempWord;           // word 临时输出目录
     private final DifyClient difyClient;
     private final com.javascene.gradingfx.config.property.DifyConfig.ApiConfig difyProperty;
+    private final String resultPath; // 导出文件根路径
+
+    // ==================== 批阅引擎线程控制 ====================
+    private final ReentrantLock pauseLock = new ReentrantLock();
+    private final Condition pausedCondition = pauseLock.newCondition();
+    private volatile boolean isPaused = false;
+    private volatile boolean isCancelled = false;
+    private volatile boolean isRunning = false;
+    private Thread schedulerThread;
+
+    // ==================== 当前任务状态 ====================
+    private volatile List<StudentResult> currentStudents;
+    private volatile String currentTaskId;
+    private volatile String currentRubric;
+    private volatile int completedCount = 0;
+    private volatile int failedCount = 0;
+    private ReviewService.ReviewProgressCallback currentCallback;
+
+    // ==================== 依赖组件 ====================
+    private final StudentResultRepository studentRepository = new StudentResultRepository();
+    private final ExportServiceImpl exportService = new ExportServiceImpl();
 
     public ReviewServiceImpl() {
         AppConfig config = ConfigLoader.getConfig();
@@ -53,6 +77,9 @@ public class ReviewServiceImpl implements ReviewService {
         this.tempWord = config.getFile().getWordPath();
         this.difyClient = new DifyClient(config.getDify().getApi().getBaseUrl());
         this.difyProperty = config.getDify().getApi();
+        this.resultPath = config.getFile().getResultPath() != null
+                ? config.getFile().getResultPath()
+                : "./run/exports";
     }
 
     //匹配学号和姓名
@@ -581,6 +608,461 @@ public class ReviewServiceImpl implements ReviewService {
             }
             list.add(element);
             FileUtil.writeJson(filePath, list);
+        }
+    }
+
+    // ==================== 多线程批阅引擎 ====================
+
+    @Override
+    public String startBatchReviewFromZip(String zipFilePath, String rubric, ReviewService.ReviewProgressCallback callback) {
+        String taskId = UUID.randomUUID().toString();
+
+        GradingTask task = new GradingTask();
+        task.setId(taskId);
+        task.setFilePath(zipFilePath);
+        task.setStatus(GradingTask.STATUS_PROCESSING);
+        task.setCreateTime(LocalDateTime.now());
+        String zipName = new File(zipFilePath).getName();
+        task.setTaskName(zipName.endsWith(".zip") ? zipName.substring(0, zipName.length() - 4) : zipName);
+
+        try {
+            List<StudentHomework> homeworks = extractFromTotalZip(zipFilePath);
+            task.setTotalStudents(homeworks.size());
+
+            if (homeworks.isEmpty()) {
+                throw new BusinessException(ErrorCodeConstant.FILE_NOT_FOUND, ErrorConstant.FILES_NOT_FOUND);
+            }
+
+            List<StudentResult> students = new ArrayList<>();
+            for (StudentHomework hw : homeworks) {
+                students.add(toStudentResult(hw, taskId));
+            }
+
+            String taskDir = ConfigLoader.getConfig().getData().getTotalTask();
+            FileUtil.ensureDirExists(taskDir);
+            appendToJsonList(taskDir, task, GradingTask.class);
+
+            startBatchReview(students, taskId, rubric, callback);
+            return taskId;
+
+        } catch (Exception e) {
+            task.setStatus(GradingTask.STATUS_FAILED);
+            task.setErrorMessage(e.getMessage());
+            task.setFinishTime(LocalDateTime.now());
+            try {
+                String taskDir = ConfigLoader.getConfig().getData().getTotalTask();
+                FileUtil.ensureDirExists(taskDir);
+                appendToJsonList(taskDir, task, GradingTask.class);
+            } catch (Exception ex) {
+                log.error("保存失败任务异常: {}", ex.getMessage());
+            }
+            if (callback != null) {
+                callback.onReviewError(e.getMessage());
+            }
+            throw new BusinessException(ErrorCodeConstant.UNKNOWN_ERROR, ErrorConstant.UNKNOWN_ERROR);
+        }
+    }
+
+    @Override
+    public void startBatchReview(List<StudentResult> allStudents, String taskId, String rubric, ReviewService.ReviewProgressCallback callback) {
+        if (isRunning) {
+            log.warn("批阅任务正在运行中，无法启动新任务");
+            if (callback != null) {
+                callback.onReviewError("批阅任务正在运行中，请先停止当前任务");
+            }
+            return;
+        }
+
+        this.currentStudents = new ArrayList<>(allStudents);
+        this.currentTaskId = taskId;
+        this.currentRubric = rubric;
+        this.currentCallback = callback;
+        this.completedCount = 0;
+        this.failedCount = 0;
+        this.isPaused = false;
+        this.isCancelled = false;
+        this.isRunning = true;
+
+        schedulerThread = new Thread(this::runBatchReviewScheduler, "BatchReview-Scheduler");
+        schedulerThread.setDaemon(true);
+        schedulerThread.start();
+    }
+
+    /**
+     * 批阅调度线程主逻辑：循环处理批次，每批 5 个学生一次性调用 Dify（并行在 Dify 端）
+     */
+    private void runBatchReviewScheduler() {
+        int totalStudents = currentStudents.size();
+        int totalBatches = (totalStudents + 4) / 5;
+        log.info("开始批阅: taskId={}, 总学生数={}, 总批次数={}", currentTaskId, totalStudents, totalBatches);
+
+        try {
+            for (int batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
+                // ===== 暂停检查点 =====
+                pauseLock.lock();
+                try {
+                    while (isPaused && !isCancelled) {
+                        log.info("批阅已暂停，等待继续... (当前批次 {}/{})", batchIdx, totalBatches);
+                        pausedCondition.await();
+                    }
+                } finally {
+                    pauseLock.unlock();
+                }
+
+                // ===== 取消检查 =====
+                if (isCancelled) {
+                    log.info("批阅已被取消，停止调度 (已完成 {} 批)", batchIdx);
+                    break;
+                }
+
+                // ===== 获取当前批次学生 =====
+                int from = batchIdx * 5;
+                int to = Math.min(from + 5, totalStudents);
+                List<StudentResult> batch = new ArrayList<>(currentStudents.subList(from, to));
+
+                // 标记为处理中（已完成的跳过——重试场景）
+                for (StudentResult s : batch) {
+                    if (!StudentResult.STATUS_APPROVED.equals(s.getStatus())) {
+                        s.setStatus(StudentResult.STATUS_PROCESSING);
+                    }
+                }
+
+                log.info("开始处理第 {}/{} 批 ({} 个学生)", batchIdx + 1, totalBatches, batch.size());
+
+                // ===== 一次性将整批作业发送给 Dify（并行在 Dify 端） =====
+                callDifyForBatch(batch, currentRubric);
+
+                // ===== 统计结果 =====
+                for (StudentResult s : batch) {
+                    if (StudentResult.STATUS_APPROVED.equals(s.getStatus())) {
+                        completedCount++;
+                    } else if (!StudentResult.STATUS_PENDING.equals(s.getStatus())) {
+                        failedCount++;
+                    }
+                }
+
+                log.info("第 {}/{} 批完成 (累计已完成: {}, 失败: {})", batchIdx + 1, totalBatches, completedCount, failedCount);
+
+                // ===== 持久化 =====
+                saveProgress(currentStudents, currentTaskId);
+
+                // ===== UI 回调 =====
+                if (currentCallback != null) {
+                    currentCallback.onBatchCompleted(completedCount, failedCount, totalStudents, batch);
+                }
+            }
+
+            // ===== 全部完成 =====
+            log.info("批阅全部完成: taskId={}, 已完成={}, 失败={}", currentTaskId, completedCount, failedCount);
+            updateGradingTaskStatus(currentTaskId, GradingTask.STATUS_SUCCESS);
+            if (currentCallback != null) {
+                currentCallback.onReviewFinished(new ArrayList<>(currentStudents));
+            }
+
+        } catch (InterruptedException e) {
+            log.warn("批阅调度线程被中断，保存已批阅结果");
+            Thread.currentThread().interrupt();
+            saveProgress(currentStudents, currentTaskId);
+            updateGradingTaskStatus(currentTaskId, GradingTask.STATUS_FAILED);
+            if (currentCallback != null) {
+                currentCallback.onReviewError("批阅被中断，已保存已批阅结果");
+            }
+        } catch (Exception e) {
+            log.error("批阅调度异常: {}", e.getMessage(), e);
+            saveProgress(currentStudents, currentTaskId);
+            updateGradingTaskStatus(currentTaskId, GradingTask.STATUS_FAILED);
+            if (currentCallback != null) {
+                currentCallback.onReviewError("批阅异常: " + e.getMessage());
+            }
+        } finally {
+            isRunning = false;
+        }
+    }
+
+    /**
+     * 一次性调用 Dify 批阅整批学生作业（并行在 Dify 端）
+     * @param batch 当前批次的学生列表（最多 5 个）
+     * @param rubric 评分标准
+     */
+    private void callDifyForBatch(List<StudentResult> batch, String rubric) {
+        // 1. 构建 homework 列表（跳过已完成的——重试场景）
+        List<StudentHomework> homeworks = new ArrayList<>();
+        Map<String, StudentResult> studentMap = new LinkedHashMap<>();
+        for (StudentResult s : batch) {
+            if (StudentResult.STATUS_APPROVED.equals(s.getStatus())) {
+                log.info("跳过已批阅学生: {} ({})", s.getStudentName(), s.getStudentId());
+                continue;
+            }
+            StudentHomework hw = new StudentHomework(
+                    s.getStudentId(),
+                    s.getStudentName(),
+                    s.getWordContent()
+            );
+            homeworks.add(hw);
+            studentMap.put(s.getStudentId(), s);
+        }
+
+        if (homeworks.isEmpty()) {
+            log.info("本批次所有学生已完成，跳过 Dify 调用");
+            return;
+        }
+
+        log.info("调用 Dify 批阅 {} 个学生 (一次性请求)", homeworks.size());
+
+        try {
+            // 2. 构建请求体，一次性发送整批作业
+            Map<String, Object> requestBody = new HashMap<>();
+            if (rubric != null && !rubric.isEmpty()) {
+                requestBody.put("rubric", rubric);
+            }
+            requestBody.put("upload_filesOFmd", homeworks);
+            requestBody.put("handle_type", "project_zip");
+
+            // 3. 调用 Dify 工作流（阻塞等待返回）
+            String response = difyClient.runWorkflowBlocking(difyProperty.getApiKey(), requestBody);
+
+            // 4. 提取 output JSON
+            String outputJson = extractOutputAsJson(response);
+            if (outputJson == null) {
+                for (StudentResult s : studentMap.values()) {
+                    s.setStatus(StudentResult.STATUS_FAILED);
+                    s.setErrorMessage("Dify返回结果解析失败");
+                }
+                return;
+            }
+
+            // 5. 解析 output 数组，按 stu_id 映射回 StudentResult
+            JsonNode root = mapper.readTree(outputJson);
+            JsonNode outputArray = root.get("output");
+            if (outputArray == null || !outputArray.isArray()) {
+                for (StudentResult s : studentMap.values()) {
+                    s.setStatus(StudentResult.STATUS_FAILED);
+                    s.setErrorMessage("Dify输出格式异常: output 不是数组");
+                }
+                return;
+            }
+
+            // 遍历 Dify 返回的学生结果数组
+            Set<String> respondedIds = new HashSet<>();
+            for (JsonNode studentNode : outputArray) {
+                String stuId = studentNode.path("stu_id").asText("");
+                String stuName = studentNode.path("stu_name").asText("");
+                String totalScore = studentNode.path("total_score").asText("");
+                String review = studentNode.path("review").asText("");
+
+                if (stuId.isEmpty()) {
+                    log.warn("跳过缺少学号的返回记录");
+                    continue;
+                }
+
+                StudentResult sr = studentMap.get(stuId);
+                if (sr == null) {
+                    log.warn("Dify 返回的学号 {} 在当前批次中找不到对应学生", stuId);
+                    continue;
+                }
+
+                sr.setStudentName(stuName.isEmpty() ? sr.getStudentName() : stuName);
+                sr.setRawScore(totalScore);
+                sr.setAiComment(review);
+                sr.setStatus(StudentResult.STATUS_APPROVED);
+                sr.setErrorMessage(null);
+                respondedIds.add(stuId);
+                log.info("学生 {} 批阅完成: 得分={}", stuId, totalScore);
+            }
+
+            // 6. 未出现在响应中的学生标记为失败
+            for (StudentResult s : studentMap.values()) {
+                if (!respondedIds.contains(s.getStudentId())) {
+                    s.setStatus(StudentResult.STATUS_FAILED);
+                    s.setErrorMessage("Dify 未返回该学生的批阅结果");
+                    log.warn("学生 {} 未在 Dify 响应中找到", s.getStudentId());
+                }
+            }
+
+        } catch (Exception e) {
+            log.error("批次 Dify 调用失败: {}", e.getMessage(), e);
+            for (StudentResult s : studentMap.values()) {
+                s.setStatus(StudentResult.STATUS_FAILED);
+                s.setErrorMessage(e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 持久化全部批阅结果：JSON + Excel + Word + TXT
+     * 合并策略：将当前批次结果与已有 JSON 合并（支持重试场景）
+     */
+    private void saveProgress(List<StudentResult> batchStudents, String taskId) {
+        log.info("保存批阅进度: taskId={}, 当前批学生数={}", taskId, batchStudents.size());
+
+        // 1. 合并：加载已有 JSON，用当前批次结果替换对应学生
+        List<StudentResult> existing = studentRepository.loadByTaskId(taskId);
+        Map<String, StudentResult> batchMap = new LinkedHashMap<>();
+        for (StudentResult s : batchStudents) {
+            batchMap.put(s.getStudentId(), s);
+        }
+
+        List<StudentResult> merged = new ArrayList<>();
+        for (StudentResult s : existing) {
+            StudentResult updated = batchMap.get(s.getStudentId());
+            if (updated != null) {
+                merged.add(updated);
+                batchMap.remove(s.getStudentId());
+            } else {
+                merged.add(s);
+            }
+        }
+        merged.addAll(batchMap.values());
+
+        // 2. 保存 JSON（覆盖）
+        studentRepository.saveByTaskId(taskId, merged);
+
+        // 3. 生成 Excel + Word（覆盖，使用合并后的完整列表）
+        String dir = getResultDir(taskId);
+        try {
+            FileUtil.ensureDirExists(dir);
+        } catch (IOException e) {
+            log.error("创建结果目录失败: {}", e.getMessage());
+        }
+        exportService.exportExcel(merged, dir + File.separator + "summary.xlsx");
+        exportService.exportWord(merged, dir + File.separator + "summary.docx");
+
+        // 4. 为本批次每个学生生成 TXT（覆盖）
+        for (StudentResult s : batchStudents) {
+            if (StudentResult.STATUS_APPROVED.equals(s.getStatus())
+                    || StudentResult.STATUS_FAILED.equals(s.getStatus())) {
+                exportService.exportTxt(s, dir + File.separator + s.getStudentId() + ".txt");
+            }
+        }
+    }
+
+    @Override
+    public void pauseReview() {
+        pauseLock.lock();
+        try {
+            isPaused = true;
+            log.info("批阅已暂停（当前批次完成后将不再提交新批次）");
+        } finally {
+            pauseLock.unlock();
+        }
+    }
+
+    @Override
+    public void resumeReview() {
+        pauseLock.lock();
+        try {
+            isPaused = false;
+            pausedCondition.signalAll();
+            log.info("批阅已继续");
+        } finally {
+            pauseLock.unlock();
+        }
+    }
+
+    @Override
+    public void stopReview() {
+        isCancelled = true;
+        pauseLock.lock();
+        try {
+            isPaused = false;
+            pausedCondition.signalAll();
+        } finally {
+            pauseLock.unlock();
+        }
+        if (schedulerThread != null) {
+            schedulerThread.interrupt();
+        }
+        log.info("批阅已请求停止，正在保存已批阅结果...");
+    }
+
+    @Override
+    public void retryFailed(String taskId, String rubric, ReviewService.ReviewProgressCallback callback) {
+        if (isRunning) {
+            if (callback != null) {
+                callback.onReviewError("批阅任务正在运行中，无法重试");
+            }
+            return;
+        }
+
+        List<StudentResult> allStudents = studentRepository.loadByTaskId(taskId);
+        if (allStudents.isEmpty()) {
+            if (callback != null) {
+                callback.onReviewError("未找到任务数据: " + taskId);
+            }
+            return;
+        }
+
+        // 筛选 PENDING / FAILED / PROCESSING 的学生
+        List<StudentResult> toRetry = new ArrayList<>();
+        for (StudentResult s : allStudents) {
+            if (!StudentResult.STATUS_APPROVED.equals(s.getStatus())) {
+                s.setStatus(StudentResult.STATUS_PENDING);
+                s.setRawScore(null);
+                s.setAiComment(null);
+                s.setErrorMessage(null);
+                toRetry.add(s);
+            }
+        }
+
+        if (toRetry.isEmpty()) {
+            log.info("没有需要重试的学生 (taskId={})", taskId);
+            if (callback != null) {
+                callback.onReviewFinished(allStudents);
+            }
+            return;
+        }
+
+        log.info("重试 {} 个学生 (taskId={})", toRetry.size(), taskId);
+        startBatchReview(toRetry, taskId, rubric, callback);
+    }
+
+    @Override
+    public boolean isReviewRunning() {
+        return isRunning;
+    }
+
+    // ==================== 辅助方法 ====================
+
+    private StudentResult toStudentResult(StudentHomework hw, String taskId) {
+        StudentResult sr = new StudentResult();
+        sr.setTaskId(taskId);
+        sr.setStudentId(hw.getStudentId());
+        sr.setStudentName(hw.getStudentName());
+        sr.setWordContent(hw.getWordContent());
+        sr.setStatus(StudentResult.STATUS_PENDING);
+        return sr;
+    }
+
+    private String getResultDir(String taskId) {
+        return resultPath + File.separator + taskId;
+    }
+
+    /**
+     * 更新 GradingTask 状态（在 totalTask.json 中查找并更新）
+     */
+    private void updateGradingTaskStatus(String taskId, int status) {
+        synchronized (FILE_LOCK) {
+            try {
+                String taskFilePath = getTotalTaskFilePath();
+                List<GradingTask> tasks = FileUtil.exists(taskFilePath)
+                        ? FileUtil.readJsonList(taskFilePath, GradingTask.class)
+                        : new ArrayList<>();
+                for (GradingTask t : tasks) {
+                    if (t.getId() != null && t.getId().equals(taskId)) {
+                        t.setStatus(status);
+                        t.setGradedStudents(completedCount);
+                        t.setFinishTime(LocalDateTime.now());
+                        if (status == GradingTask.STATUS_FAILED) {
+                            t.setErrorMessage("批阅中断或异常，已保存已批阅结果");
+                        }
+                        t.setRetryCount(t.getRetryCount() + 1);
+                        break;
+                    }
+                }
+                FileUtil.writeJsonList(taskFilePath, tasks);
+            } catch (IOException e) {
+                log.error("更新任务状态失败: {}", e.getMessage());
+            }
         }
     }
 

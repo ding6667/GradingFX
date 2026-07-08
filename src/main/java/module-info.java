@@ -23,12 +23,20 @@ module com.javascene.gradingfx {
     requires java.desktop;
     requires org.apache.commons.io;
 
+    // Apache POI for Excel/Word generation
+    requires org.apache.poi.ooxml;
+    requires org.apache.commons.compress;
+
 
     opens com.javascene.gradingfx to javafx.fxml;
     exports com.javascene.gradingfx;
     opens com.javascene.gradingfx.controller to javafx.fxml;
-    opens com.javascene.gradingfx.model to javafx.base;
+    opens com.javascene.gradingfx.model to javafx.base, com.fasterxml.jackson.databind;
     exports com.javascene.gradingfx.model;
     exports com.javascene.gradingfx.enmu;
     opens com.javascene.gradingfx.config.property to com.fasterxml.jackson.databind;
+    exports com.javascene.gradingfx.repository;
+    opens com.javascene.gradingfx.repository to com.fasterxml.jackson.databind;
+    exports com.javascene.gradingfx.service;
+    opens com.javascene.gradingfx.service.Impl to com.fasterxml.jackson.databind;
 }

@@ -9,6 +9,12 @@ import lombok.Data;
  */
 @Data
 public class StudentResult {
+    /** 状态常量 */
+    public static final String STATUS_PENDING = "PENDING";
+    public static final String STATUS_PROCESSING = "PROCESSING";
+    public static final String STATUS_APPROVED = "APPROVED";
+    public static final String STATUS_FAILED = "FAILED";
+
     /** 关联的任务ID */
     private String taskId;
     /** 学生学号 */
@@ -25,8 +31,10 @@ public class StudentResult {
     private String teacherComment;
     /** 教师备注 */
     private String teacherNote;
-    /** 状态：APPROVED=已确认, PROCESSING=处理中, FAILED=失败 */
+    /** 状态：PENDING=待批阅, PROCESSING=处理中, APPROVED=已批阅, FAILED=失败 */
     private String status;
     /** 错误信息（处理失败时记录） */
     private String errorMessage;
+    /** 学生作业内容（Markdown格式，用于调用Dify，持久化以便重试） */
+    private String wordContent;
 }

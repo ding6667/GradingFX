@@ -5,6 +5,7 @@ import com.javascene.gradingfx.constant.ErrorMessageConstant;
 import com.javascene.gradingfx.enmu.ReviewStatus;
 import com.javascene.gradingfx.model.GradingTask;
 import com.javascene.gradingfx.model.HistoryTask;
+import com.javascene.gradingfx.model.StudentResult;
 import com.javascene.gradingfx.model.StudentResultProperty;
 import com.javascene.gradingfx.service.HistoryService;
 import com.javascene.gradingfx.service.Impl.HistoryServiceImpl;
@@ -14,6 +15,7 @@ import com.javascene.gradingfx.service.ReviewService;
 import com.javascene.gradingfx.service.StandardService;
 import com.javascene.gradingfx.util.AlertUtil;
 import com.javascene.gradingfx.util.ConfigLoader;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
@@ -76,6 +78,9 @@ public class MainController {
     private final StandardService standardService = new StandardServiceImpl();
 
     private final AppConfig appConfig = ConfigLoader.getConfig();
+
+    /** 当前批阅任务ID */
+    private String currentTaskId = null;
 
 
     @FXML
@@ -268,21 +273,155 @@ public class MainController {
             AlertUtil.showError(ErrorMessageConstant.FILE_NOT_SELECTED);
             return;
         }
-        // 默认批阅第一个
-        reviewService.runWorkflowWithProjectZip(selectedFileObjects.get(0).getAbsolutePath(), standardService.getCurrentStandard());
-        refresh();
+        if (reviewService.isReviewRunning()) {
+            AlertUtil.showError("批阅任务正在运行中，请先停止当前任务");
+            return;
+        }
+
+        String zipPath = selectedFileObjects.get(0).getAbsolutePath();
+        String rubric = standardService.getCurrentStandard();
+
+        // 清空表格数据，准备新批阅
+        studentData.clear();
+        progressBar.setProgress(0);
+        progressLabel.setText("准备中...");
+
+        updateButtonStates(true, false);
+
+        // 启动批阅（service 内部创建调度线程，非阻塞）
+        currentTaskId = reviewService.startBatchReviewFromZip(zipPath, rubric, createProgressCallback());
     }
 
     @FXML void handlePause() {
-        System.out.println("暂停批阅");
+        reviewService.pauseReview();
+        updateButtonStates(true, true);
     }
 
     @FXML void handleResume() {
-        System.out.println("继续批阅");
+        reviewService.resumeReview();
+        updateButtonStates(true, false);
     }
 
     @FXML void handleRetry() {
-        System.out.println("重试失败项");
+        if (currentTaskId == null) {
+            AlertUtil.showError("没有可重试的任务");
+            return;
+        }
+        if (reviewService.isReviewRunning()) {
+            AlertUtil.showError("批阅任务正在运行中，无法重试");
+            return;
+        }
+
+        String rubric = standardService.getCurrentStandard();
+        updateButtonStates(true, false);
+        reviewService.retryFailed(currentTaskId, rubric, createProgressCallback());
+    }
+
+    /**
+     * 创建批阅进度回调，通过 Platform.runLater 更新 UI
+     */
+    private ReviewService.ReviewProgressCallback createProgressCallback() {
+        return new ReviewService.ReviewProgressCallback() {
+            @Override
+            public void onBatchCompleted(int completed, int failed, int total, List<StudentResult> batchResults) {
+                Platform.runLater(() -> {
+                    // 更新进度条
+                    double progress = (double) (completed + failed) / total;
+                    progressBar.setProgress(progress);
+                    progressLabel.setText(String.format("已完成 %d / %d （成功 %d，失败 %d）",
+                            completed + failed, total, completed, failed));
+
+                    // 更新表格数据
+                    for (StudentResult sr : batchResults) {
+                        updateStudentResultProperty(sr);
+                    }
+
+                    // 更新统计标签
+                    totalLabel.setText(String.valueOf(total));
+                    completedLabel.setText(String.valueOf(completed));
+                    failedLabel.setText(String.valueOf(failed));
+
+                    // 更新树
+                    setupStudentTree();
+                });
+            }
+
+            @Override
+            public void onReviewFinished(List<StudentResult> allResults) {
+                Platform.runLater(() -> {
+                    progressBar.setProgress(1.0);
+                    progressLabel.setText("批阅完成");
+                    updateButtonStates(false, false);
+
+                    // 刷新整个表格
+                    studentData.clear();
+                    for (StudentResult sr : allResults) {
+                        studentData.add(toProperty(sr));
+                    }
+                    resultTable.setItems(studentData);
+                    setupStudentTree();
+                });
+            }
+
+            @Override
+            public void onReviewError(String error) {
+                Platform.runLater(() -> {
+                    progressLabel.setText("批阅异常: " + error);
+                    updateButtonStates(false, false);
+                    AlertUtil.showError("批阅异常: " + error);
+                    refresh();
+                });
+            }
+        };
+    }
+
+    /**
+     * 将单个 StudentResult 更新到表格的 ObservableList 中
+     */
+    private void updateStudentResultProperty(StudentResult sr) {
+        for (StudentResultProperty prop : studentData) {
+            if (prop.getId() != null && prop.getId().equals(sr.getStudentId())) {
+                prop.setRawScore(sr.getRawScore());
+                prop.setAiComment(sr.getAiComment());
+                prop.setErrorMessage(sr.getErrorMessage());
+                try {
+                    prop.setStatus(ReviewStatus.valueOf(sr.getStatus()));
+                } catch (IllegalArgumentException e) {
+                    prop.setStatus(ReviewStatus.FAILED);
+                }
+                return;
+            }
+        }
+        // 未找到则新增
+        studentData.add(toProperty(sr));
+    }
+
+    /**
+     * StudentResult → StudentResultProperty 转换
+     */
+    private StudentResultProperty toProperty(StudentResult sr) {
+        return new StudentResultProperty(
+                sr.getTaskId(),
+                sr.getStudentId(),
+                sr.getStudentName(),
+                sr.getRawScore(),
+                sr.getAiComment(),
+                sr.getTeacherScore(),
+                sr.getTeacherComment(),
+                sr.getTeacherNote(),
+                sr.getStatus(),
+                sr.getErrorMessage()
+        );
+    }
+
+    /**
+     * 更新按钮状态
+     */
+    private void updateButtonStates(boolean running, boolean paused) {
+        startBtn.setDisable(running);
+        pauseBtn.setDisable(!running || paused);
+        resumeBtn.setDisable(!paused);
+        retryBtn.setDisable(running);
     }
 
     @FXML void handleViewDetail() {
