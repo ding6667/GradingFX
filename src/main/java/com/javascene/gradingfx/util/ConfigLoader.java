@@ -1,9 +1,11 @@
 package com.javascene.gradingfx.util;
 
 
-import com.javascene.gradingfx.config.property.AppConfig;
-import org.yaml.snakeyaml.Yaml;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.javascene.gradingfx.config.property.AppConfig;
 
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -14,6 +16,10 @@ import java.nio.file.Paths;
  * 配置加载器，负责从 YAML 文件加载配置
  */
 public class ConfigLoader {
+    private static final ObjectMapper MAPPER = new ObjectMapper(new YAMLFactory())
+            .findAndRegisterModules()
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+
     private static volatile AppConfig instance;
 
     static {
@@ -22,21 +28,10 @@ public class ConfigLoader {
 
     private static void load() {
         try {
-            // 优先尝试加载外部配置文件（方便打包后修改）
-            Path externalConfig = Paths.get("./config/application.yml");
-            if (Files.exists(externalConfig)) {
-                try (InputStream in = Files.newInputStream(externalConfig)) {
-                    instance = parseYaml(in);
-                    System.out.println("加载外部配置: " + externalConfig.toAbsolutePath());
-                    return;
-                }
-            }
-
-            // 从类路径加载（开发时放在 src/main/resources）
             try (InputStream in = ConfigLoader.class.getClassLoader()
                     .getResourceAsStream("application.yml")) {
                 if (in != null) {
-                    instance = parseYaml(in);
+                    instance = MAPPER.readValue(in, AppConfig.class);
                     System.out.println("加载类路径配置: application.yml");
                 } else {
                     System.err.println("未找到 application.yml，使用默认配置");
@@ -45,13 +40,8 @@ public class ConfigLoader {
             }
         } catch (Exception e) {
             System.err.println("加载配置文件失败: " + e.getMessage());
-            instance = new AppConfig(); // fallback 默认空配置
+            instance = new AppConfig();
         }
-    }
-
-    private static AppConfig parseYaml(InputStream in) {
-        Yaml yaml = new Yaml();
-        return yaml.loadAs(in,AppConfig.class);
     }
 
     /**

@@ -20,7 +20,7 @@ public class GradingTask {
     /** 任务唯一标识（UUID） */
     private String id;
     /** 上传的zip文件路径 */
-    private String fileId;
+    private String filePath;
     /** 任务名称（取自zip文件名） */
     private String taskName;
     /** 学生总数 */

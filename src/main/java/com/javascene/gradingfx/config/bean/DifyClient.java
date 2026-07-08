@@ -36,6 +36,9 @@ public class DifyClient {
      * @param baseUrl
      */
     public DifyClient(String baseUrl) {
+        if (baseUrl == null || baseUrl.isBlank()) {
+            throw new IllegalArgumentException("Dify baseUrl 不能为空，请检查 application.yml 中 dify.api.baseUrl 配置");
+        }
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(30))

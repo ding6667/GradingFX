@@ -21,9 +21,9 @@ public class HistoryServiceImpl implements HistoryService {
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-    private String getTaskFilePath() {
+    private String getTotalTaskFilePath() {
         DataConfig data = ConfigLoader.getConfig().getData();
-        return data.getTask() + File.separator + "tasks.json";
+        return data.getTotalTask();
     }
 
     private String getScoreFilePath() {
@@ -33,7 +33,7 @@ public class HistoryServiceImpl implements HistoryService {
 
     @Override
     public List<HistoryTask> loadAllTasks() {
-        String path = getTaskFilePath();
+        String path = getTotalTaskFilePath();
         if (!FileUtil.exists(path)) {
             return Collections.emptyList();
         }

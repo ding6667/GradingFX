@@ -3,21 +3,23 @@ app:
   version: "1.0.0"
 dify:
   api:
-    api-key: "app-h2yIzEsq6W2C5eHN0MtDVRt2"   # Dify应用的API密钥
-    base-url: "http://localhost:5001/v1" # Dify API服务的地址
+    apiKey: "app-h2yIzEsq6W2C5eHN0MtDVRt2"   # Dify应用的API密钥
+    baseUrl: "http://localhost:5001/v1" # Dify API服务的地址
 python:
   exe: "D:\\dev\\python\\python.exe"
   script:
-    md_to_docx_path: "src/main/java/com/javascene/gradingfx/pyscript/md_to_docx.py"
-    docx_to_md_path: "src/main/java/com/javascene/gradingfx/pyscript/docx_to_md.py"
+    mdToDocxPath: "src/main/java/com/javascene/gradingfx/pyscript/md_to_docx.py"
+    docxToMdPath: "src/main/java/com/javascene/gradingfx/pyscript/docx_to_md.py"
 file:
-  zip_path: "src/main/java/com/javascene/gradingfx/file/zip"
-  unzip_path: "src/main/java/com/javascene/gradingfx/file/unzip"
-  temp_path: "src/main/java/com/javascene/gradingfx/file/temp"
-  word_path: "src/main/java/com/javascene/gradingfx/file/word"
-  excel_path: "src/main/java/com/javascene/gradingfx/file/excel"
+  zipPath: "src/main/java/com/javascene/gradingfx/file/zip"
+  unzipPath: "src/main/java/com/javascene/gradingfx/file/unzip"
+  tempPath: "src/main/java/com/javascene/gradingfx/file/temp"
+  wordPath: "src/main/java/com/javascene/gradingfx/file/word"
+  excelPath: "src/main/java/com/javascene/gradingfx/file/excel"
+  resultPath: "src/main/java/com/javascene/gradingfx/file/result"
 data:
-  task: "src/main/java/com/javascene/gradingfx/data/task"  # 单个学生任务数据存储路径，该表存放的是一个zip文件下的所有批阅记录
-  total_task: "src/main/java/com/javascene/gradingfx/data/total_task"  # 所有学生任务数据存储路径，记录所有zip文件的总数据
-  result: "src/main/java/com/javascene/gradingfx/data/result"
+  task: "src/main/java/com/javascene/gradingfx/data/task"
+  totalTask: "src/main/java/com/javascene/gradingfx/data/totalTask.json"
+  result: "src/main/java/com/javascene/gradingfx/data/results.json"
   standard: "src/main/java/com/javascene/gradingfx/data/standard"
+  currentStandard: "src/main/java/com/javascene/gradingfx/data/currentStandard.json"

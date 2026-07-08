@@ -1,9 +1,19 @@
 package com.javascene.gradingfx.controller;
 
+import com.javascene.gradingfx.config.property.AppConfig;
+import com.javascene.gradingfx.constant.ErrorMessageConstant;
 import com.javascene.gradingfx.enmu.ReviewStatus;
+import com.javascene.gradingfx.model.GradingTask;
+import com.javascene.gradingfx.model.HistoryTask;
 import com.javascene.gradingfx.model.StudentResultProperty;
 import com.javascene.gradingfx.service.HistoryService;
 import com.javascene.gradingfx.service.Impl.HistoryServiceImpl;
+import com.javascene.gradingfx.service.Impl.ReviewServiceImpl;
+import com.javascene.gradingfx.service.Impl.StandardServiceImpl;
+import com.javascene.gradingfx.service.ReviewService;
+import com.javascene.gradingfx.service.StandardService;
+import com.javascene.gradingfx.util.AlertUtil;
+import com.javascene.gradingfx.util.ConfigLoader;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
@@ -21,8 +31,10 @@ import javafx.stage.Stage;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 public class MainController {
 
@@ -60,6 +72,11 @@ public class MainController {
     private final ObservableList<StudentResultProperty> studentData = FXCollections.observableArrayList();
     private final ObservableList<File> selectedFileObjects = FXCollections.observableArrayList();
     private final HistoryService historyService = new HistoryServiceImpl();
+    private final ReviewService reviewService = new ReviewServiceImpl();
+    private final StandardService standardService = new StandardServiceImpl();
+
+    private final AppConfig appConfig = ConfigLoader.getConfig();
+
 
     @FXML
     public void initialize() {
@@ -85,22 +102,17 @@ public class MainController {
             }
         });
 
-        // Load mock data
-        loadMockData();
+        loadData();
     }
 
-    private void loadMockData() {
-        studentData.addAll(List.of(
-            new StudentResultProperty("task1", "2021001", "张三", "85", "代码结构清晰，变量命名规范", "85", "良好", "", ReviewStatus.APPROVED, ""),
-            new StudentResultProperty("task1", "2021002", "李四", "92", "优秀的实现！算法效率高", "92", "优秀", "", ReviewStatus.APPROVED, ""),
-            new StudentResultProperty("task1", "2021003", "王五", "78", "基本功能实现，但存在代码冗余", "78", "及格", "", ReviewStatus.APPROVED, ""),
-            new StudentResultProperty("task1", "2021004", "赵六", "0", "文件解析失败", "0", "", "", ReviewStatus.FAILED, "文件格式不正确"),
-            new StudentResultProperty("task1", "2021005", "钱七", "88", "良好的代码风格", "88", "良好", "", ReviewStatus.APPROVED, ""),
-            new StudentResultProperty("task1", "2021006", "孙八", "95", "接近满分的作业", "95", "优秀", "", ReviewStatus.APPROVED, ""),
-            new StudentResultProperty("task1", "2021007", "周九", "72", "功能基本完整，测试覆盖不足", "", "", "", ReviewStatus.PENDING, ""),
-            new StudentResultProperty("task1", "2021008", "吴十", "0", "文件解析失败", "0", "", "", ReviewStatus.FAILED, "缺少必要文件")
-        ));
-
+    private void loadData() {
+        // 取最近一次的批阅任务ID
+        List<GradingTask> gradingTasks = new ArrayList<>(reviewService.loadAllTasks());
+        gradingTasks.sort(Comparator.comparing(GradingTask::getCreateTime).reversed());
+        if (!gradingTasks.isEmpty()) {
+            String taskId = gradingTasks.get(0).getId();
+            studentData.addAll(reviewService.loadTask(taskId));
+        }
         resultTable.setItems(studentData);
         totalLabel.setText(String.valueOf(studentData.size()));
 
@@ -131,9 +143,9 @@ public class MainController {
         long completed = studentData.stream().filter(r -> r.getStatus() == ReviewStatus.APPROVED).count();
         long failed = studentData.stream().filter(r -> r.getStatus() == ReviewStatus.FAILED).count();
 
-        TreeItem<String> pendingItem = new TreeItem<>("⏳ 待批阅 (" + pending + ")");
-        TreeItem<String> completedItem = new TreeItem<>("✅ 已完成 (" + completed + ")");
-        TreeItem<String> failedItem = new TreeItem<>("❌ 失败 (" + failed + ")");
+        TreeItem<String> pendingItem = new TreeItem<>(" 待批阅 (" + pending + ")");
+        TreeItem<String> completedItem = new TreeItem<>(" 已完成 (" + completed + ")");
+        TreeItem<String> failedItem = new TreeItem<>(" 失败 (" + failed + ")");
 
         for (StudentResultProperty r : studentData) {
             String label = r.getName() + " - " + r.getId();
@@ -150,11 +162,11 @@ public class MainController {
     }
 
     @FXML void handleOpenStandard() {
-        // Open standard view
+        showView("standard-view.fxml", "设置评分标准",o -> {});
     }
 
     @FXML void handleOpenHistory() {
-        // Open history view
+        showView("history-view.fxml", "查看历史记录",o -> {});
     }
 
     @FXML void handleUploadClick() {
@@ -252,7 +264,13 @@ public class MainController {
     }
 
     @FXML void handleStart() {
-        System.out.println("开始批阅");
+        if (selectedFileObjects.isEmpty()) {
+            AlertUtil.showError(ErrorMessageConstant.FILE_NOT_SELECTED);
+            return;
+        }
+        // 默认批阅第一个
+        reviewService.runWorkflowWithProjectZip(selectedFileObjects.get(0).getAbsolutePath(), standardService.getCurrentStandard());
+        refresh();
     }
 
     @FXML void handlePause() {
@@ -275,17 +293,17 @@ public class MainController {
     }
 
     @FXML void handleExportExcel() {
-        System.out.println("Export to Excel");
+
     }
 
     @FXML void handleExportWord() {
-        System.out.println("Export to Word");
+
     }
 
     // 弹窗显示视图并刷新数据
     private <T> void showView(String viewPath, String title, Consumer<T> controllerConsumer) {
         try {
-            FXMLLoader loader = new FXMLLoader(getClass().getResource(viewPath));
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/javascene/gradingfx/" + viewPath));
             Parent root = loader.load();
             T controller = loader.getController();
             controllerConsumer.accept(controller);
@@ -303,6 +321,7 @@ public class MainController {
     }
 
     private void refresh() {
-
+        studentData.clear();
+        loadData();
     }
 }

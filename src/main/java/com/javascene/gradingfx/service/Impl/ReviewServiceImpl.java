@@ -12,10 +12,7 @@ import com.javascene.gradingfx.constant.ErrorCodeConstant;
 import com.javascene.gradingfx.exception.BusinessException;
 import com.javascene.gradingfx.exception.FilesNotFoundException;
 import com.javascene.gradingfx.exception.ServerDocumentParsingException;
-import com.javascene.gradingfx.model.GradingResult;
-import com.javascene.gradingfx.model.GradingTask;
-import com.javascene.gradingfx.model.StudentHomework;
-import com.javascene.gradingfx.model.StudentResult;
+import com.javascene.gradingfx.model.*;
 import com.javascene.gradingfx.service.ReviewService;
 import com.javascene.gradingfx.util.ConfigLoader;
 import com.javascene.gradingfx.util.FileUtil;
@@ -61,7 +58,15 @@ public class ReviewServiceImpl implements ReviewService {
     //匹配学号和姓名
     private static final Pattern STUDENT_INFO_PATTERN = Pattern.compile("^(\\d{10})(\\s*)([\\u4e00-\\u9fa5·]{2,16})$");
 
+    private String getTaskFilePath(String taskId) {
+        DataConfig data = ConfigLoader.getConfig().getData();
+        return data.getTask() + File.separator + taskId + "task.json";
+    }
 
+    private String getTotalTaskFilePath() {
+        DataConfig data = ConfigLoader.getConfig().getData();
+        return data.getTotalTask();
+    }
     /**
      * 批量提取总压缩包内的所有学生作业信息
      * @param totalZipPath 总压缩包路径
@@ -294,6 +299,29 @@ public class ReviewServiceImpl implements ReviewService {
         }
     }
 
+    @Override
+    public List<GradingTask> loadAllTasks() {
+        String taskFilePath = getTotalTaskFilePath();
+        try {
+            return FileUtil.readJsonList(taskFilePath, GradingTask.class);
+        } catch (IOException e) {
+            log.error("读取任务文件失败: {}", e.getMessage());
+            return List.of();
+        }
+
+    }
+
+    @Override
+    public List<StudentResultProperty> loadTask(String taskId) {
+        String taskFilePath = getTaskFilePath(taskId);
+        try {
+            return FileUtil.readJsonList(taskFilePath, StudentResultProperty.class);
+        } catch (IOException e) {
+            log.error("读取任务文件失败: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
     private Map<String, Object> handleProject_zip(String outputJson) {
         Map<String, Object> result = new HashMap<>();
         List<String> reviews = new ArrayList<>();
@@ -413,12 +441,12 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     public String runWorkflowWithProjectZip(String zipFilePath, String rubric) {
         DataConfig dataConfig = ConfigLoader.getConfig().getData();
-        String taskDir = dataConfig.getTask();
+        String taskDir = dataConfig.getTotalTask();
         String resultDir = dataConfig.getResult();
 
         GradingTask gradingTask = new GradingTask();
         gradingTask.setId(UUID.randomUUID().toString());
-        gradingTask.setFileId(zipFilePath);
+        gradingTask.setFilePath(zipFilePath);
         gradingTask.setStatus(GradingTask.STATUS_PROCESSING);
         gradingTask.setCreateTime(LocalDateTime.now());
 
@@ -490,14 +518,14 @@ public class ReviewServiceImpl implements ReviewService {
                 gradingTask.setStatus(GradingTask.STATUS_SUCCESS);
                 gradingTask.setFinishTime(LocalDateTime.now());
                 FileUtil.ensureDirExists(taskDir);
-                appendToJsonList(taskDir + File.separator + "tasks.json", gradingTask, GradingTask.class);
+                appendToJsonList(taskDir , gradingTask, GradingTask.class);
 
                 gradingResult.setStatus(0);
                 gradingResult.setWordPath(wordPath);
                 gradingResult.setExcelPath(excelPath);
                 gradingResult.setExpireTime(LocalDateTime.now().plusDays(7));
                 FileUtil.ensureDirExists(resultDir);
-                appendToJsonList(resultDir + File.separator + "results.json", gradingResult, GradingResult.class);
+                appendToJsonList(resultDir , gradingResult, GradingResult.class);
                 return "wordPath=" + wordPath + "&excelPath=" + excelPath;
 
 
@@ -515,7 +543,7 @@ public class ReviewServiceImpl implements ReviewService {
             gradingTask.setFinishTime(LocalDateTime.now());
             try {
                 FileUtil.ensureDirExists(taskDir);
-                appendToJsonList(taskDir + File.separator + "tasks.json", gradingTask, GradingTask.class);
+                appendToJsonList(taskDir , gradingTask, GradingTask.class);
             } catch (Exception ex) {
                 log.error("保存失败任务文件异常: {}", ex.getMessage());
             }

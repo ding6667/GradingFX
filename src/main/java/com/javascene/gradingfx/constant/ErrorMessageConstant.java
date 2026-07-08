@@ -10,4 +10,6 @@ public class ErrorMessageConstant {
     public static final String UNKNOWN_ERROR = "未知错误";
     //删除失败
     public static final String DELETE_FAILED = "删除文件失败";
+    //未选中文件
+    public static final String FILE_NOT_SELECTED = "未选中文件";
 }

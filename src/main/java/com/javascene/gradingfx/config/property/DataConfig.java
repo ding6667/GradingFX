@@ -8,4 +8,5 @@ public class DataConfig {
     private String result;
     private String standard;
     private String totalTask;
+    private String currentStandard;
 }
