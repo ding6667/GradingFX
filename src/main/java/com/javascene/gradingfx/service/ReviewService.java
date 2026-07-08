@@ -66,6 +66,13 @@ public interface ReviewService {
     boolean isReviewRunning();
 
     /**
+     * 按需导出 Excel：从轻量 JSON 读取最新成绩，生成 Excel 文件
+     * @param taskId 任务 ID
+     * @return 生成的 Excel 文件路径，失败返回 null
+     */
+    String exportExcel(String taskId);
+
+    /**
      * 从 zip 提取学生作业列表
      */
     List<StudentHomework> extractFromTotalZip(String totalZipPath) throws Exception;

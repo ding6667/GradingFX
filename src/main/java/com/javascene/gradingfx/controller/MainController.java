@@ -432,7 +432,16 @@ public class MainController {
     }
 
     @FXML void handleExportExcel() {
-
+        if (currentTaskId == null) {
+            AlertUtil.showError("没有可导出的任务");
+            return;
+        }
+        String path = reviewService.exportExcel(currentTaskId);
+        if (path != null) {
+            AlertUtil.showInfo("Excel 导出成功", "文件路径: " + path);
+        } else {
+            AlertUtil.showError("导出失败，未找到任务数据");
+        }
     }
 
     @FXML void handleExportWord() {

@@ -611,7 +611,7 @@ public class ReviewServiceImpl implements ReviewService {
         }
     }
 
-    // ==================== 多线程批阅引擎 ====================
+
 
     @Override
     public String startBatchReviewFromZip(String zipFilePath, String rubric, ReviewService.ReviewProgressCallback callback) {
@@ -743,8 +743,8 @@ public class ReviewServiceImpl implements ReviewService {
 
                 log.info("第 {}/{} 批完成 (累计已完成: {}, 失败: {})", batchIdx + 1, totalBatches, completedCount, failedCount);
 
-                // ===== 持久化 =====
-                saveProgress(currentStudents, currentTaskId);
+                // ===== 持久化（只传当前批次，让合并逻辑有意义） =====
+                saveProgress(batch, currentTaskId);
 
                 // ===== UI 回调 =====
                 if (currentCallback != null) {
@@ -785,7 +785,7 @@ public class ReviewServiceImpl implements ReviewService {
      * @param rubric 评分标准
      */
     private void callDifyForBatch(List<StudentResult> batch, String rubric) {
-        // 1. 构建 homework 列表（跳过已完成的——重试场景）
+        // 构建 homework 列表（跳过已完成的——重试场景）
         List<StudentHomework> homeworks = new ArrayList<>();
         Map<String, StudentResult> studentMap = new LinkedHashMap<>();
         for (StudentResult s : batch) {
@@ -807,10 +807,10 @@ public class ReviewServiceImpl implements ReviewService {
             return;
         }
 
-        log.info("调用 Dify 批阅 {} 个学生 (一次性请求)", homeworks.size());
+        log.info("调用 Dify 批阅 {} 个学生", homeworks.size());
 
         try {
-            // 2. 构建请求体，一次性发送整批作业
+            // 构建请求体，一次性发送整批作业
             Map<String, Object> requestBody = new HashMap<>();
             if (rubric != null && !rubric.isEmpty()) {
                 requestBody.put("rubric", rubric);
@@ -818,10 +818,10 @@ public class ReviewServiceImpl implements ReviewService {
             requestBody.put("upload_filesOFmd", homeworks);
             requestBody.put("handle_type", "project_zip");
 
-            // 3. 调用 Dify 工作流（阻塞等待返回）
+            // 调用 Dify 工作流（阻塞等待返回）
             String response = difyClient.runWorkflowBlocking(difyProperty.getApiKey(), requestBody);
 
-            // 4. 提取 output JSON
+            // 提取 output JSON
             String outputJson = extractOutputAsJson(response);
             if (outputJson == null) {
                 for (StudentResult s : studentMap.values()) {
@@ -831,7 +831,7 @@ public class ReviewServiceImpl implements ReviewService {
                 return;
             }
 
-            // 5. 解析 output 数组，按 stu_id 映射回 StudentResult
+            // 解析 output 数组，按 stu_id 映射回 StudentResult
             JsonNode root = mapper.readTree(outputJson);
             JsonNode outputArray = root.get("output");
             if (outputArray == null || !outputArray.isArray()) {
@@ -870,7 +870,7 @@ public class ReviewServiceImpl implements ReviewService {
                 log.info("学生 {} 批阅完成: 得分={}", stuId, totalScore);
             }
 
-            // 6. 未出现在响应中的学生标记为失败
+            // 未出现在响应中的学生标记为失败
             for (StudentResult s : studentMap.values()) {
                 if (!respondedIds.contains(s.getStudentId())) {
                     s.setStatus(StudentResult.STATUS_FAILED);
@@ -889,13 +889,13 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     /**
-     * 持久化全部批阅结果：JSON + Excel + Word + TXT
+     * 持久化批阅结果：JSON + Word + TXT（Excel 改为按钮触发，不在此自动生成）
      * 合并策略：将当前批次结果与已有 JSON 合并（支持重试场景）
      */
     private void saveProgress(List<StudentResult> batchStudents, String taskId) {
         log.info("保存批阅进度: taskId={}, 当前批学生数={}", taskId, batchStudents.size());
 
-        // 1. 合并：加载已有 JSON，用当前批次结果替换对应学生
+        // 合并：加载已有 JSON，用当前批次结果替换对应学生
         List<StudentResult> existing = studentRepository.loadByTaskId(taskId);
         Map<String, StudentResult> batchMap = new LinkedHashMap<>();
         for (StudentResult s : batchStudents) {
@@ -914,18 +914,42 @@ public class ReviewServiceImpl implements ReviewService {
         }
         merged.addAll(batchMap.values());
 
-        // 2. 保存 JSON（覆盖）
+        // 保存 JSON（双文件：轻量主文件 + content 文件）
         studentRepository.saveByTaskId(taskId, merged);
 
-        // 3. 生成 Excel + Word（覆盖，使用合并后的完整列表）
+        // 生成 Word
         String dir = getResultDir(taskId);
         try {
             FileUtil.ensureDirExists(dir);
         } catch (IOException e) {
             log.error("创建结果目录失败: {}", e.getMessage());
         }
-        exportService.exportExcel(merged, dir + File.separator + "summary.xlsx");
-        exportService.exportWord(merged, dir + File.separator + "summary.docx");
+        try {
+            List<String> reviews = new ArrayList<>();
+            for (StudentResult s : merged) {
+                if (s.getAiComment() != null && !s.getAiComment().isEmpty()) {
+                    reviews.add(s.getAiComment());
+                }
+            }
+            if (!reviews.isEmpty()) {
+                // 构造 output 数组节点
+                JsonNode outputNode = mapper.valueToTree(reviews);
+                ObjectNode resultJson = mapper.createObjectNode();
+                resultJson.set("output", outputNode);
+                String wordJsonStr = mapper.writeValueAsString(resultJson);
+                // 调用 mdConvertToWord 生成 Word 文档
+                String wordPath = mdConvertToWord(wordJsonStr).get("wordPath");
+                // 将生成的 Word 文件复制到结果目录
+                if (wordPath != null && !wordPath.isEmpty()) {
+                    File srcWord = new File(wordPath);
+                    File dstWord = new File(dir + File.separator + "summary.docx");
+                    FileUtils.copyFile(srcWord, dstWord);
+                    log.info("Word 文档已生成: {}", dstWord.getAbsolutePath());
+                }
+            }
+        } catch (Exception e) {
+            log.error("生成 Word 文档失败: {}", e.getMessage(), e);
+        }
 
         // 4. 为本批次每个学生生成 TXT（覆盖）
         for (StudentResult s : batchStudents) {
@@ -984,7 +1008,8 @@ public class ReviewServiceImpl implements ReviewService {
             return;
         }
 
-        List<StudentResult> allStudents = studentRepository.loadByTaskId(taskId);
+        // 重试需要 wordContent 重新调用 Dify，所以用 loadByTaskIdWithContent
+        List<StudentResult> allStudents = studentRepository.loadByTaskIdWithContent(taskId);
         if (allStudents.isEmpty()) {
             if (callback != null) {
                 callback.onReviewError("未找到任务数据: " + taskId);
@@ -1019,6 +1044,28 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     public boolean isReviewRunning() {
         return isRunning;
+    }
+
+    @Override
+    public String exportExcel(String taskId) {
+        // 从轻量 JSON 读取最新成绩（不含 wordContent，加载快）
+        List<StudentResult> students = studentRepository.loadByTaskId(taskId);
+        if (students.isEmpty()) {
+            log.warn("导出 Excel 失败：未找到任务数据 taskId={}", taskId);
+            return null;
+        }
+
+        String dir = getResultDir(taskId);
+        try {
+            FileUtil.ensureDirExists(dir);
+        } catch (IOException e) {
+            log.error("创建结果目录失败: {}", e.getMessage());
+        }
+
+        String excelPath = dir + File.separator + "summary.xlsx";
+        exportService.exportExcel(students, excelPath);
+        log.info("Excel 已导出: {} (共 {} 条)", excelPath, students.size());
+        return excelPath;
     }
 
     // ==================== 辅助方法 ====================
