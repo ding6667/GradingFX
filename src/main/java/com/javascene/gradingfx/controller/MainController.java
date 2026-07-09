@@ -37,7 +37,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class MainController {
 
     @FXML private StackPane uploadArea;
@@ -287,7 +289,7 @@ public class MainController {
             return;
         }
         if (reviewService.isReviewRunning()) {
-            AlertUtil.showError("批阅任务正在运行中，请先停止当前任务");
+            AlertUtil.showError(ErrorMessageConstant.REVIEW_RUNNING);
             return;
         }
 
@@ -320,11 +322,11 @@ public class MainController {
 
     @FXML void handleRetry() {
         if (currentTaskId == null) {
-            AlertUtil.showError("没有可重试的任务");
+            AlertUtil.showError(ErrorMessageConstant.NO_TASK_TO_RETRY);
             return;
         }
         if (reviewService.isReviewRunning()) {
-            AlertUtil.showError("批阅任务正在运行中，无法重试");
+            AlertUtil.showError(ErrorMessageConstant.REVIEW_RUNNING_CANNOT_RETRY);
             return;
         }
 
@@ -384,10 +386,10 @@ public class MainController {
             @Override
             public void onReviewError(String error) {
                 Platform.runLater(() -> {
-                    progressLabel.setText("批阅异常: " + error);
+                    progressLabel.setText(ErrorMessageConstant.REVIEW_ERROR_PREFIX + error);
                     isPaused = false;
                     updateButtonStates(false, false);
-                    AlertUtil.showError("批阅异常: " + error);
+                    AlertUtil.showError(ErrorMessageConstant.REVIEW_ERROR_PREFIX + error);
                     refresh();
                 });
             }
@@ -450,33 +452,38 @@ public class MainController {
 
     @FXML void handleViewDetail() {
         StudentResultProperty selected = resultTable.getSelectionModel().getSelectedItem();
-        if (selected != null) {
-            System.out.println("View detail for: " + selected.getName());
+        if (selected == null) {
+            AlertUtil.showError(ErrorMessageConstant.FILE_NOT_SELECTED);
+            return;
         }
+        showView("result-detail-view.fxml", "查看详情", controller -> {
+            ((ResultDetailController) controller).setStudentResult(selected, currentTaskId);
+        });
     }
 
     @FXML void handleExportExcel() {
         if (currentTaskId == null) {
-            AlertUtil.showError("没有可导出的任务");
+            AlertUtil.showError(ErrorMessageConstant.NO_TASK_TO_EXPORT);
             return;
         }
         String path = reviewService.exportExcel(currentTaskId);
         if (path != null) {
             AlertUtil.showInfo("Excel 导出成功", "文件路径: " + path);
         } else {
-            AlertUtil.showError("导出失败，未找到任务数据");
+            AlertUtil.showError(ErrorMessageConstant.EXPORT_DATA_NOT_FOUND);
         }
     }
 
     @FXML void handleExportWord() {
         if (currentTaskId == null) {
+            AlertUtil.showError(ErrorMessageConstant.NO_TASK_TO_EXPORT);
             return;
         }
         String path = reviewService.exportWord(currentTaskId);
         if (path != null) {
             AlertUtil.showInfo("Word 导出成功", "文件路径: " + path);
         } else {
-            AlertUtil.showError("导出失败，未找到任务数据");
+            AlertUtil.showError(ErrorMessageConstant.EXPORT_DATA_NOT_FOUND);
         }
     }
 
@@ -496,7 +503,8 @@ public class MainController {
 
             refresh();
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("加载视图失败: {}", e.getMessage(), e);
+            AlertUtil.showError(ErrorMessageConstant.VIEW_LOAD_FAILED);
         }
     }
 

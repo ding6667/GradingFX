@@ -1,6 +1,8 @@
 package com.javascene.gradingfx.controller;
 
+import com.javascene.gradingfx.constant.ErrorMessageConstant;
 import com.javascene.gradingfx.model.ExportConfig;
+import com.javascene.gradingfx.util.AlertUtil;
 import com.javascene.gradingfx.util.ConfigLoader;
 import com.javascene.gradingfx.util.FileUtil;
 import javafx.fxml.FXML;
@@ -35,6 +37,7 @@ public class ExportController {
                 }
             } catch (IOException e) {
                 log.error("加载导出配置失败: {}", e.getMessage());
+                AlertUtil.showError(ErrorMessageConstant.EXPORT_CONFIG_LOAD_FAILED);
             }
         }
         fileNameField.setPromptText("例如: 作业成绩_{date}");
@@ -60,6 +63,7 @@ public class ExportController {
         String configPath = ConfigLoader.getConfig().getData().getExportConfig();
         if (configPath == null || configPath.isEmpty()) {
             log.error("未配置 exportConfig 路径");
+            AlertUtil.showError(ErrorMessageConstant.EXPORT_CONFIG_PATH_MISSING);
             return;
         }
 
@@ -70,8 +74,10 @@ public class ExportController {
             }
             FileUtil.writeJson(configPath, config);
             log.info("导出配置已保存: path={}, template={}", config.getOutputPath(), config.getFileNameTemplate());
+            AlertUtil.showSuccess("导出配置已保存");
         } catch (IOException e) {
             log.error("保存导出配置失败: {}", e.getMessage());
+            AlertUtil.showError(ErrorMessageConstant.EXPORT_CONFIG_SAVE_FAILED);
         }
 
         // 关闭窗口
