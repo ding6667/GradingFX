@@ -184,7 +184,14 @@ public class MainController {
     }
 
     @FXML void handleOpenHistory() {
-        showView("history-view.fxml", "查看历史记录",o -> {});
+        showView("history-view.fxml", "查看历史记录", controller -> {
+            if (controller instanceof HistoryController hc) {
+                hc.setOnResultSelected(taskId -> {
+                    // showView 关闭后在 refresh 之后执行
+                    javafx.application.Platform.runLater(() -> loadResults(taskId));
+                });
+            }
+        });
     }
 
     @FXML void handleUploadClick() {
@@ -466,12 +473,22 @@ public class MainController {
             AlertUtil.showError(ErrorMessageConstant.NO_TASK_TO_EXPORT);
             return;
         }
-        String path = reviewService.exportExcel(currentTaskId);
-        if (path != null) {
-            AlertUtil.showInfo("Excel 导出成功", "文件路径: " + path);
-        } else {
-            AlertUtil.showError(ErrorMessageConstant.EXPORT_DATA_NOT_FOUND);
-        }
+        String taskId = currentTaskId;
+        javafx.concurrent.Task<String> task = new javafx.concurrent.Task<>() {
+            @Override protected String call() { return reviewService.exportExcel(taskId); }
+        };
+        task.setOnSucceeded(e -> {
+            String path = task.getValue();
+            if (path != null) {
+                AlertUtil.showInfo("Excel 导出成功", "文件路径: " + path);
+            } else {
+                AlertUtil.showError(ErrorMessageConstant.EXPORT_DATA_NOT_FOUND);
+            }
+        });
+        task.setOnFailed(e -> AlertUtil.showError("导出失败: " + task.getException().getMessage()));
+        Thread t = new Thread(task);
+        t.setDaemon(true);
+        t.start();
     }
 
     @FXML void handleExportWord() {
@@ -479,12 +496,22 @@ public class MainController {
             AlertUtil.showError(ErrorMessageConstant.NO_TASK_TO_EXPORT);
             return;
         }
-        String path = reviewService.exportWord(currentTaskId);
-        if (path != null) {
-            AlertUtil.showInfo("Word 导出成功", "文件路径: " + path);
-        } else {
-            AlertUtil.showError(ErrorMessageConstant.EXPORT_DATA_NOT_FOUND);
-        }
+        String taskId = currentTaskId;
+        javafx.concurrent.Task<String> task = new javafx.concurrent.Task<>() {
+            @Override protected String call() { return reviewService.exportWord(taskId); }
+        };
+        task.setOnSucceeded(e -> {
+            String path = task.getValue();
+            if (path != null) {
+                AlertUtil.showInfo("Word 导出成功", "文件路径: " + path);
+            } else {
+                AlertUtil.showError(ErrorMessageConstant.EXPORT_DATA_NOT_FOUND);
+            }
+        });
+        task.setOnFailed(e -> AlertUtil.showError("导出失败: " + task.getException().getMessage()));
+        Thread t = new Thread(task);
+        t.setDaemon(true);
+        t.start();
     }
 
     // 弹窗显示视图并刷新数据

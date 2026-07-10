@@ -55,7 +55,7 @@ public class ReviewServiceImpl implements ReviewService {
     private volatile boolean isPaused = false;
     private volatile boolean isCancelled = false;
     private volatile boolean isRunning = false;
-    private Thread schedulerThread;
+    private volatile Thread schedulerThread;
 
     // ==================== 当前任务状态 ====================
     private volatile List<StudentResult> currentStudents;
@@ -63,7 +63,9 @@ public class ReviewServiceImpl implements ReviewService {
     private volatile String currentRubric;
     private volatile int completedCount = 0;
     private volatile int failedCount = 0;
-    private ReviewService.ReviewProgressCallback currentCallback;
+    private volatile ReviewService.ReviewProgressCallback currentCallback;
+    /** 重试时保存完整学生列表，用于回调返回完整结果 */
+    private volatile List<StudentResult> fullStudentList;
 
     // ==================== 依赖组件 ====================
     private final StudentResultRepository studentRepository = new StudentResultRepository();
@@ -88,7 +90,7 @@ public class ReviewServiceImpl implements ReviewService {
 
     private String getTaskFilePath(String taskId) {
         DataConfig data = ConfigLoader.getConfig().getData();
-        return data.getTask() + File.separator + taskId + "task.json";
+        return data.getTask() + File.separator + "task_" + taskId + ".json";
     }
 
     private String getTotalTaskFilePath() {
@@ -341,13 +343,12 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     public List<StudentResultProperty> loadTask(String taskId) {
-        String taskFilePath = getTaskFilePath(taskId);
-        try {
-            return FileUtil.readJsonList(taskFilePath, StudentResultProperty.class);
-        } catch (IOException e) {
-            log.error("读取任务文件失败: {}", e.getMessage());
-            return List.of();
+        List<StudentResult> results = studentRepository.loadByTaskId(taskId);
+        List<StudentResultProperty> props = new ArrayList<>();
+        for (StudentResult r : results) {
+            props.add(toProperty(r));
         }
+        return props;
     }
 
     private Map<String, Object> handleProject_zip(String outputJson) {
@@ -695,6 +696,7 @@ public class ReviewServiceImpl implements ReviewService {
         this.currentTaskId = taskId;
         this.currentRubric = rubric;
         this.currentCallback = callback;
+        this.fullStudentList = null;
         this.completedCount = 0;
         this.failedCount = 0;
         this.isPaused = false;
@@ -738,6 +740,14 @@ public class ReviewServiceImpl implements ReviewService {
                 int to = Math.min(from + 5, totalStudents);
                 List<StudentResult> batch = new ArrayList<>(currentStudents.subList(from, to));
 
+                // 记录批阅前已完成的学生（重试场景防重复计数）
+                Set<String> alreadyApproved = new HashSet<>();
+                for (StudentResult s : batch) {
+                    if (StudentResult.STATUS_APPROVED.equals(s.getStatus())) {
+                        alreadyApproved.add(s.getStudentId());
+                    }
+                }
+
                 // 标记为处理中（已完成的跳过——重试场景）
                 for (StudentResult s : batch) {
                     if (!StudentResult.STATUS_APPROVED.equals(s.getStatus())) {
@@ -750,8 +760,9 @@ public class ReviewServiceImpl implements ReviewService {
                 // ===== 一次性将整批作业发送给 Dify（并行在 Dify 端） =====
                 callDifyForBatch(batch, currentRubric);
 
-                // ===== 统计结果 =====
+                // ===== 统计结果（跳过批阅前已完成的学生） =====
                 for (StudentResult s : batch) {
+                    if (alreadyApproved.contains(s.getStudentId())) continue;
                     if (StudentResult.STATUS_APPROVED.equals(s.getStatus())) {
                         completedCount++;
                     } else if (!StudentResult.STATUS_PENDING.equals(s.getStatus())) {
@@ -763,6 +774,20 @@ public class ReviewServiceImpl implements ReviewService {
 
                 // ===== 持久化（只传当前批次，让合并逻辑有意义） =====
                 saveProgress(batch, currentTaskId);
+
+                // ===== 重试场景：将本批结果合并回完整列表 =====
+                if (fullStudentList != null) {
+                    Map<String, StudentResult> batchMap = new LinkedHashMap<>();
+                    for (StudentResult s : batch) {
+                        batchMap.put(s.getStudentId(), s);
+                    }
+                    for (int i = 0; i < fullStudentList.size(); i++) {
+                        StudentResult updated = batchMap.get(fullStudentList.get(i).getStudentId());
+                        if (updated != null) {
+                            fullStudentList.set(i, updated);
+                        }
+                    }
+                }
 
                 // ===== UI 回调 =====
                 if (currentCallback != null) {
@@ -781,7 +806,11 @@ public class ReviewServiceImpl implements ReviewService {
                 updateGradingResult(gr);
             }
             if (currentCallback != null) {
-                currentCallback.onReviewFinished(new ArrayList<>(currentStudents));
+                List<StudentResult> finalResults = fullStudentList != null
+                        ? new ArrayList<>(fullStudentList)
+                        : new ArrayList<>(currentStudents);
+                fullStudentList = null;
+                currentCallback.onReviewFinished(finalResults);
             }
 
         } catch (InterruptedException e) {
@@ -1065,6 +1094,7 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         log.info("重试 {} 个学生 (taskId={})", toRetry.size(), taskId);
+        this.fullStudentList = new ArrayList<>(allStudents);
         startBatchReview(toRetry, taskId, rubric, callback);
     }
 
@@ -1191,6 +1221,14 @@ public class ReviewServiceImpl implements ReviewService {
         sr.setWordContent(hw.getWordContent());
         sr.setStatus(StudentResult.STATUS_PENDING);
         return sr;
+    }
+
+    private StudentResultProperty toProperty(StudentResult sr) {
+        return new StudentResultProperty(
+                sr.getTaskId(), sr.getStudentId(), sr.getStudentName(),
+                sr.getRawScore(), sr.getAiComment(),
+                sr.getTeacherScore(), sr.getTeacherComment(), sr.getTeacherNote(),
+                sr.getStatus(), sr.getErrorMessage());
     }
 
     private String getResultDir(String taskId) {
