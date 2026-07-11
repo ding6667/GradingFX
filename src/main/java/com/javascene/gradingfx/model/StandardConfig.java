@@ -4,5 +4,5 @@ import lombok.Data;
 
 @Data
 public class StandardConfig {
-    private String currentStandard;
+    private String text;
 }
