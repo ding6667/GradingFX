@@ -312,7 +312,17 @@ public class MainController {
         updateButtonStates(true, false);
 
         // 启动批阅（service 内部创建调度线程，非阻塞）
-        currentTaskId = reviewService.startBatchReviewFromZip(zipPath, rubric, createProgressCallback());
+        try {
+            currentTaskId = reviewService.startBatchReviewFromZip(zipPath, rubric, createProgressCallback());
+            if (currentTaskId == null) {
+                updateButtonStates(false, false);
+            }
+        } catch (Exception e) {
+            log.error("启动批阅失败: {}", e.getMessage(), e);
+            progressLabel.setText(ErrorMessageConstant.REVIEW_ERROR_PREFIX + e.getMessage());
+            updateButtonStates(false, false);
+            AlertUtil.showError(ErrorMessageConstant.REVIEW_ERROR_PREFIX + e.getMessage());
+        }
     }
 
     @FXML void handlePause() {

@@ -236,9 +236,7 @@ public class ReviewServiceImpl implements ReviewService {
                 results.add(output.toString().trim());
             }
             log.info("转换完成，共转换 {} 个文件", results.size());
-            Map<String, List<String>> resultMap = new HashMap<>();
-            resultMap.put("files", results);
-            return resultMap;
+            return Map.of("files", results);
 
 
         } catch (IOException e) {
@@ -259,9 +257,22 @@ public class ReviewServiceImpl implements ReviewService {
         }
         log.info(difyResponseJson);
 
-
+        // 兼容两种输入格式：
+        // 1. Dify API 响应（含 task_id）→ 用 extractOutputAsJson 提取
+        // 2. 已提取好的 {"output": [...]} → 直接使用
+        String outputJson;
+        try {
+            JsonNode checkNode = mapper.readTree(difyResponseJson);
+            if (checkNode.has("output") && !checkNode.has("task_id")) {
+                outputJson = difyResponseJson;
+            } else {
+                outputJson = extractOutputAsJson(difyResponseJson);
+            }
+        } catch (Exception e) {
+            outputJson = extractOutputAsJson(difyResponseJson);
+        }
         // 校验outputJson是否为空
-        if(difyResponseJson == null){
+        if(outputJson == null){
             throw new ServerDocumentParsingException(ErrorConstant.MD_CONTENT_INVALID);
         }
 
@@ -272,7 +283,7 @@ public class ReviewServiceImpl implements ReviewService {
             tempFile = Files.createTempFile("dify_review_", ".json");
 
             // 将JSON 字符串以 UTF-8 编码写入这个临时文件
-            Files.writeString(tempFile, difyResponseJson, StandardCharsets.UTF_8);
+            Files.writeString(tempFile, outputJson, StandardCharsets.UTF_8);
             log.info("已成功创建本地临时中转文件: {}", tempFile.toAbsolutePath());
 
             // 构建命令行
@@ -307,10 +318,8 @@ public class ReviewServiceImpl implements ReviewService {
 
             int exitCode = process.exitValue();
             if (exitCode == 0) {
-                int markerIdx = outputPath.lastIndexOf("生成至-");
-                if (markerIdx >= 0) {
-                    outputPath = outputPath.substring(markerIdx + "生成至-".length()).trim();
-                }
+                String[] parts = outputPath.split(Pattern.quote("-"), 2);
+                outputPath = parts.length > 1 ? parts[1].trim() : outputPath.trim();
                 log.info("Word 文档已顺利生成。{}", outputPath);
                 return Map.of("wordPath", outputPath);
             } else {
@@ -357,7 +366,6 @@ public class ReviewServiceImpl implements ReviewService {
 
     private Map<String, Object> handleProject_zip(String outputJson) {
         Map<String, Object> result = new HashMap<>();
-        Map<String, List<String>> studentScores = new LinkedHashMap<>();
         List<String> reviews = new ArrayList<>();
         try{
             JsonNode root = mapper.readTree(outputJson);
@@ -370,17 +378,18 @@ public class ReviewServiceImpl implements ReviewService {
                     String studentName = student.path("stu_name").asText("");
                     String studentId = student.path("stu_id").asText("");
                     String totalScore = student.path("total_score").asText("");
-                    String review =  student.path("content").asText("");
+                    String review =  student.path("review").asText("");
                     if (studentId.isEmpty()) {
                         log.warn("跳过缺少学号的学生记录");
                         continue;
                     }
-                    studentScores.put(studentId, List.of(studentName, totalScore));
+                    // key = 学生学号，value = list（name,totalScore）用于生成execl文件
+                    result.put(studentId, List.of(studentName, totalScore));
+                    // 存储review，用于生成word文档
                     reviews.add(review);
                 }
+                result.put("reviews", reviews);
             }
-            result.put("studentScores", studentScores);
-            result.put("reviews", reviews);
             return result;
         } catch (ServerDocumentParsingException e) {
             throw e;
@@ -419,7 +428,22 @@ public class ReviewServiceImpl implements ReviewService {
 
             JsonNode outputsNode = dataNode.get("outputs");
             if (outputsNode == null || !outputsNode.has("output")) {
-                log.error("JSON 中未找到 'output' 键");
+                // 打印实际返回的 keys 帮助排查
+                log.error("JSON 中未找到 'output' 键, 实际 outputs 内容: {}", outputsNode);
+                // 兼容：遍历 outputs 找第一个 Array 类型的值
+                if (outputsNode != null) {
+                    Iterator<Map.Entry<String, JsonNode>> fields = outputsNode.fields();
+                    while (fields.hasNext()) {
+                        Map.Entry<String, JsonNode> entry = fields.next();
+                        if (entry.getValue().isArray()) {
+                            log.info("使用替代输出键: {}", entry.getKey());
+                            JsonNode outputNode = entry.getValue();
+                            ObjectNode resultJson = mapper.createObjectNode();
+                            resultJson.set("output", outputNode);
+                            return mapper.writeValueAsString(resultJson);
+                        }
+                    }
+                }
                 return null;
             }
 
@@ -521,9 +545,9 @@ public class ReviewServiceImpl implements ReviewService {
                 students.add(toStudentResult(hw, taskId));
             }
 
-            String taskDir = ConfigLoader.getConfig().getData().getTotalTask();
-            FileUtil.ensureDirExists(taskDir);
-            appendToJsonList(taskDir, task, GradingTask.class);
+            String taskFile = ConfigLoader.getConfig().getData().getTotalTask();
+            ensureParentDirExists(taskFile);
+            appendToJsonList(taskFile, task, GradingTask.class);
 
             // 创建 GradingResult 并写入 results.json
             GradingResult gradingResult = new GradingResult();
@@ -533,10 +557,7 @@ public class ReviewServiceImpl implements ReviewService {
             gradingResult.setScoreChanged(0);
             try {
                 String resultsPath = getResultsJsonPath();
-                File parentDir = new File(resultsPath).getParentFile();
-                if (parentDir != null) {
-                    FileUtil.ensureDirExists(parentDir.getAbsolutePath());
-                }
+                ensureParentDirExists(resultsPath);
                 appendToJsonList(resultsPath, gradingResult, GradingResult.class);
             } catch (IOException e) {
                 log.error("写入 GradingResult 失败: {}", e.getMessage());
@@ -546,13 +567,14 @@ public class ReviewServiceImpl implements ReviewService {
             return taskId;
 
         } catch (Exception e) {
+            log.error("启动批阅任务失败: {}", e.getMessage(), e);
             task.setStatus(GradingTask.STATUS_FAILED);
             task.setErrorMessage(e.getMessage());
             task.setFinishTime(LocalDateTime.now());
             try {
-                String taskDir = ConfigLoader.getConfig().getData().getTotalTask();
-                FileUtil.ensureDirExists(taskDir);
-                appendToJsonList(taskDir, task, GradingTask.class);
+                String taskFile = ConfigLoader.getConfig().getData().getTotalTask();
+                ensureParentDirExists(taskFile);
+                appendToJsonList(taskFile, task, GradingTask.class);
             } catch (Exception ex) {
                 log.error("保存失败任务异常: {}", ex.getMessage());
             }
@@ -678,10 +700,6 @@ public class ReviewServiceImpl implements ReviewService {
 
             // ===== 全部完成 =====
             log.info("批阅全部完成: taskId={}, 已完成={}, 失败={}", currentTaskId, completedCount, failedCount);
-            generateSummaryWord(currentTaskId);
-            if (failedCount == 0) {
-                generateSummaryExcel(currentTaskId);
-            }
             updateGradingTaskStatus(currentTaskId, GradingTask.STATUS_SUCCESS);
             // 更新 GradingResult 状态为成功
             GradingResult gr = findGradingResult(currentTaskId);
@@ -749,19 +767,19 @@ public class ReviewServiceImpl implements ReviewService {
         log.info("调用 Dify 批阅 {} 个学生", homeworks.size());
 
         try {
-            // 构建请求体，一次性发送整批作业
-            Map<String, Object> requestBody = new HashMap<>();
-            Map<String, Object> homeworksMap = new HashMap<>();
-            homeworksMap.put("files", homeworks);
+            // 构建 inputs（DifyClient.buildRequest 会自动包装 inputs/user/response_mode）
+            Map<String, Object> inputs = new HashMap<>();
             if (rubric != null && !rubric.isEmpty()) {
-                requestBody.put("rubric", rubric);
+                inputs.put("rubric", rubric);
             }
-            requestBody.put("upload_filesOFmd", homeworksMap);
-            requestBody.put("handle_type", "project_zip");
-
+            // Dify 要求 upload_filesOFmd 为 dict 类型，包装为 {"files": [...]}
+            Map<String, Object> homeworksWrapper = new HashMap<>();
+            homeworksWrapper.put("files", homeworks);
+            inputs.put("upload_filesOFmd", homeworksWrapper);
+            inputs.put("handle_type", "project_zip");
 
             // 调用 Dify 工作流（阻塞等待返回）
-            String response = difyClient.runWorkflowBlocking(difyProperty.getApiKey(), requestBody);
+            String response = difyClient.runWorkflowBlocking(difyProperty.getApiKey(), inputs);
 
             // 提取 output JSON
             String outputJson = extractOutputAsJson(response);
@@ -859,11 +877,40 @@ public class ReviewServiceImpl implements ReviewService {
         // 保存 JSON（双文件：轻量主文件 + content 文件）
         studentRepository.saveByTaskId(taskId, merged);
 
+        // 生成 Word
         String dir = getResultDir(taskId);
         try {
             FileUtil.ensureDirExists(dir);
         } catch (IOException e) {
             log.error("创建结果目录失败: {}", e.getMessage());
+        }
+        try {
+            List<String> reviews = new ArrayList<>();
+            for (StudentResult s : merged) {
+                if (s.getAiComment() != null && !s.getAiComment().isEmpty()) {
+                    reviews.add(s.getAiComment());
+                }
+            }
+            if (!reviews.isEmpty()) {
+                // 构造 output 数组节点
+                JsonNode outputNode = mapper.valueToTree(reviews);
+                ObjectNode resultJson = mapper.createObjectNode();
+                resultJson.set("output", outputNode);
+                String wordJsonStr = mapper.writeValueAsString(resultJson);
+                // 调用 mdConvertToWord 生成 Word 文档
+                String wordPath = mdConvertToWord(wordJsonStr).get("wordPath");
+                // 将生成的 Word 文件复制到结果目录
+                if (wordPath != null && !wordPath.isEmpty()) {
+                    File srcWord = new File(wordPath);
+                    File dstWord = new File(dir + File.separator + "summary.docx");
+                    FileUtils.copyFile(srcWord, dstWord);
+                    log.info("Word 文档已生成: {}", dstWord.getAbsolutePath());
+                    // 将 Word 路径写入 GradingResult
+                    updateGradingResultWordPath(taskId, dstWord.getAbsolutePath());
+                }
+            }
+        } catch (Exception e) {
+            log.error("生成 Word 文档失败: {}", e.getMessage(), e);
         }
 
         // 4. 为本批次每个学生生成 TXT（覆盖）
@@ -911,15 +958,7 @@ public class ReviewServiceImpl implements ReviewService {
         if (schedulerThread != null) {
             schedulerThread.interrupt();
         }
-        try {
-            if (currentStudents != null && currentTaskId != null) {
-                saveProgress(currentStudents, currentTaskId);
-                updateGradingTaskStatus(currentTaskId, GradingTask.STATUS_FAILED);
-            }
-        } catch (Exception e) {
-            log.error("停止时保存进度失败: {}", e.getMessage(), e);
-        }
-        log.info("批阅已停止，已保存已批阅结果");
+        log.info("批阅已请求停止，正在保存已批阅结果...");
     }
 
     @Override
@@ -1078,63 +1117,17 @@ public class ReviewServiceImpl implements ReviewService {
         return null;
     }
 
-    private void generateSummaryExcel(String taskId) {
-        try {
-            List<StudentResult> students = studentRepository.loadByTaskId(taskId);
-            if (students.isEmpty()) {
-                log.warn("生成汇总 Excel 失败：未找到任务数据 taskId={}", taskId);
-                return;
-            }
-            String dir = getResultDir(taskId);
-            FileUtil.ensureDirExists(dir);
-            String excelPath = dir + File.separator + "summary.xlsx";
-            exportService.exportExcel(students, excelPath);
-            log.info("汇总 Excel 已自动生成: {}", excelPath);
-            GradingResult gr = findGradingResult(taskId);
-            if (gr != null) {
-                gr.setExcelPath(excelPath);
-                gr.setScoreChanged(0);
-                updateGradingResult(gr);
-            }
-        } catch (Exception e) {
-            log.error("自动生成汇总 Excel 失败: {}", e.getMessage(), e);
-        }
-    }
-    private void generateSummaryWord(String taskId) {
-        try {
-            List<StudentResult> students = studentRepository.loadByTaskId(taskId);
-            if (students.isEmpty()) {
-                log.warn("生成汇总 Word 失败：未找到任务数据 taskId={}", taskId);
-                return;
-            }
-            List<String> reviews = new ArrayList<>();
-            for (StudentResult s : students) {
-                if (s.getAiComment() != null && !s.getAiComment().isEmpty()) {
-                    reviews.add(s.getAiComment());
-                }
-            }
-            if (reviews.isEmpty()) {
-                log.warn("没有可用的批语用于生成汇总 Word");
-                return;
-            }
-            JsonNode outputNode = mapper.valueToTree(reviews);
-            ObjectNode resultJson = mapper.createObjectNode();
-            resultJson.set("output", outputNode);
-            String wordJsonStr = mapper.writeValueAsString(resultJson);
-            String wordPath = mdConvertToWord(wordJsonStr).get("wordPath");
-            if (wordPath != null && !wordPath.isEmpty()) {
-                String dir = getResultDir(taskId);
-                File srcWord = new File(wordPath);
-                File dstWord = new File(dir + File.separator + "summary.docx");
-                FileUtils.copyFile(srcWord, dstWord);
-                log.info("汇总 Word 文档已生成: {}", dstWord.getAbsolutePath());
-                updateGradingResultWordPath(taskId, dstWord.getAbsolutePath());
-            }
-        } catch (Exception e) {
-            log.error("生成汇总 Word 文档失败: {}", e.getMessage(), e);
-        }
-    }
     // ==================== 辅助方法 ====================
+
+    /**
+     * 确保文件路径的父目录存在（避免误将文件路径当目录创建）
+     */
+    private void ensureParentDirExists(String filePath) throws IOException {
+        File parent = new File(filePath).getParentFile();
+        if (parent != null) {
+            FileUtil.ensureDirExists(parent.getAbsolutePath());
+        }
+    }
 
     private StudentResult toStudentResult(StudentHomework hw, String taskId) {
         StudentResult sr = new StudentResult();
@@ -1253,8 +1246,7 @@ public class ReviewServiceImpl implements ReviewService {
         synchronized (FILE_LOCK) {
             try {
                 String resultsPath = getResultsJsonPath();
-                File resultsFile = new File(resultsPath);
-                if (!resultsFile.exists() || resultsFile.length() == 0) return null;
+                if (!FileUtil.exists(resultsPath)) return null;
                 List<GradingResult> results = FileUtil.readJsonList(resultsPath, GradingResult.class);
                 for (GradingResult r : results) {
                     if (taskId.equals(r.getTaskId())) {
@@ -1275,8 +1267,7 @@ public class ReviewServiceImpl implements ReviewService {
         synchronized (FILE_LOCK) {
             try {
                 String resultsPath = getResultsJsonPath();
-                File resultsFile = new File(resultsPath);
-                if (!resultsFile.exists() || resultsFile.length() == 0) return;
+                if (!FileUtil.exists(resultsPath)) return;
                 List<GradingResult> results = FileUtil.readJsonList(resultsPath, GradingResult.class);
                 for (int i = 0; i < results.size(); i++) {
                     if (updated.getTaskId().equals(results.get(i).getTaskId())) {
@@ -1298,8 +1289,7 @@ public class ReviewServiceImpl implements ReviewService {
         synchronized (FILE_LOCK) {
             try {
                 String resultsPath = getResultsJsonPath();
-                File resultsFile = new File(resultsPath);
-                if (!resultsFile.exists() || resultsFile.length() == 0) return;
+                if (!FileUtil.exists(resultsPath)) return;
                 List<GradingResult> results = FileUtil.readJsonList(resultsPath, GradingResult.class);
                 for (GradingResult r : results) {
                     if (taskId.equals(r.getTaskId())) {

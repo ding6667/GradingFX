@@ -51,7 +51,7 @@ public class StudentResultRepository {
     public List<StudentResult> loadByTaskId(String taskId) {
         String path = getTaskJsonPath(taskId);
         if (!FileUtil.exists(path)) {
-            log.warn("任务 JSON 文件不存在: {}", path);
+            log.debug("任务 JSON 文件不存在（首次保存）: {}", path);
             return new ArrayList<>();
         }
         try {
