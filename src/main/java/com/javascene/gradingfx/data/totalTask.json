@@ -31,4 +31,37 @@
   "finishTime" : "2026-07-11T18:31:21.8899509",
   "errorMessage" : null,
   "retryCount" : 1
+}, {
+  "id" : "d10ce98f-e302-40ba-84ac-ddbf88ec1bcd",
+  "filePath" : "E:\\杂文件\\智能体\\编程\\编程\\singleTest.zip",
+  "taskName" : "singleTest",
+  "totalStudents" : 1,
+  "gradedStudents" : 0,
+  "status" : 0,
+  "createTime" : "2026-07-11T18:39:38.6007385",
+  "finishTime" : null,
+  "errorMessage" : null,
+  "retryCount" : 0
+}, {
+  "id" : "fa30f064-1168-4453-acdf-b2e32a15e9e8",
+  "filePath" : "E:\\杂文件\\智能体\\编程\\编程\\singleTest.zip",
+  "taskName" : "singleTest",
+  "totalStudents" : 1,
+  "gradedStudents" : 0,
+  "status" : 2,
+  "createTime" : "2026-07-11T18:44:28.9507648",
+  "finishTime" : "2026-07-11T18:44:37.7599048",
+  "errorMessage" : null,
+  "retryCount" : 1
+}, {
+  "id" : "9a4e4264-5609-473e-bca7-0c20ccb210d4",
+  "filePath" : "E:\\杂文件\\智能体\\编程\\编程\\singleTest.zip",
+  "taskName" : "singleTest",
+  "totalStudents" : 1,
+  "gradedStudents" : 1,
+  "status" : 2,
+  "createTime" : "2026-07-11T19:03:44.7186356",
+  "finishTime" : "2026-07-11T19:04:03.9177191",
+  "errorMessage" : null,
+  "retryCount" : 1
 } ]

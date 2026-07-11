@@ -80,6 +80,10 @@ public class FileUtil {
      * 从 JSON 文件读取并反序列化为指定类型
      */
     public static <T> T readJson(String filePath, Class<T> clazz) throws IOException {
+        File file = new File(filePath);
+        if (!file.exists() || !file.isFile()) {
+            return null;
+        }
         return MAPPER.readValue(new File(filePath), clazz);
     }
 

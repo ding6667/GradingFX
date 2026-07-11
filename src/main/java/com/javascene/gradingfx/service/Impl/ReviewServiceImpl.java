@@ -743,16 +743,15 @@ public class ReviewServiceImpl implements ReviewService {
         try {
             // 构建请求体，一次性发送整批作业
             Map<String, Object> requestBody = new HashMap<>();
-            Map<String, Object> inputs = new HashMap<>();
+            Map<String, Object> homeworksMap = new HashMap<>();
+            homeworksMap.put("files", homeworks);
             if (rubric != null && !rubric.isEmpty()) {
-                inputs.put("rubric", rubric);
+                requestBody.put("rubric", rubric);
             }
-            inputs.put("upload_filesOFmd", homeworks);
-            inputs.put("handle_type", "project_zip");
+            requestBody.put("upload_filesOFmd", homeworksMap);
+            requestBody.put("handle_type", "project_zip");
 
-            requestBody.put("inputs", inputs);
-            requestBody.put("user", "test-user");
-            requestBody.put("response_mode", "blocking");   // 改为 blocking
+
             // 调用 Dify 工作流（阻塞等待返回）
             String response = difyClient.runWorkflowBlocking(difyProperty.getApiKey(), requestBody);
 
