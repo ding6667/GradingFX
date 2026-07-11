@@ -26,7 +26,7 @@ import java.util.List;
 @Slf4j
 public class ExportServiceImpl implements ExportService {
 
-    private static final String[] EXCEL_HEADERS = {"学号", "姓名", "AI评分", "教师评分", "状态", "错误信息"};
+    private static final String[] EXCEL_HEADERS = {"序号", "学号", "姓名", "评分"};
     private final AppConfig  appConfig = ConfigLoader.getConfig();
 
     @Override
@@ -47,12 +47,12 @@ public class ExportServiceImpl implements ExportService {
             for (int i = 0; i < students.size(); i++) {
                 StudentResult s = students.get(i);
                 XSSFRow row = sheet.createRow(i + 1);
-                setCellValue(row, 0, s.getStudentId());
-                setCellValue(row, 1, s.getStudentName());
-                setCellValue(row, 2, s.getRawScore());
-                setCellValue(row, 3, s.getTeacherScore());
-                setCellValue(row, 4, s.getStatus());
-                setCellValue(row, 5, s.getErrorMessage());
+                setCellValue(row, 0, String.valueOf(i + 1));
+                setCellValue(row, 1, s.getStudentId());
+                setCellValue(row, 2, s.getStudentName());
+                String finalScore = (s.getTeacherScore() != null && !s.getTeacherScore().isEmpty())
+                        ? s.getTeacherScore() : s.getRawScore();
+                setCellValue(row, 3, finalScore);
             }
 
             // 自适应列宽
