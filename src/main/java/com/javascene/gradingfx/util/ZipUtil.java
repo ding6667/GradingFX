@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -34,7 +35,7 @@ public class ZipUtil {
      */
     public static void unzip(String zipFilePath, File destDir) throws IOException {
         destDir.mkdirs();
-        try (ZipInputStream zis = new ZipInputStream(new FileInputStream(zipFilePath))) {
+        try (ZipInputStream zis = new ZipInputStream(new FileInputStream(zipFilePath), Charset.forName("GBK"))) {
             ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
                 File outFile = new File(destDir, entry.getName());

@@ -68,4 +68,14 @@ public class ErrorMessageConstant {
     public static final String SELECT_TEMPLATE = "请选择要加载的模板";
     public static final String LOAD_OTHER_TEMPLATE_SUCCESS = "模板加载完成";
 
-}
+    public static final String EXPORT_CONFIG_LOAD_FAILED = "导出配置加载失败";
+    public static final String EXPORT_CONFIG_PATH_MISSING = "导出配置路径不能为空";
+    public static final String EXPORT_CONFIG_SAVE_FAILED = "导出配置保存失败";
+    public static final String EXPORT_DATA_NOT_FOUND = "导出数据不存在";
+    public static final String REVIEW_RUNNING = "当前有评分任务正在运行，无法导出报告";
+    public static final String NO_TASK_TO_RETRY = "没有可重试的评分任务";
+    public static final String REVIEW_RUNNING_CANNOT_RETRY = "评分任务正在运行中，无法重试";
+    public static final String REVIEW_ERROR_PREFIX = "评分出错：";
+    public static final String NO_TASK_TO_EXPORT = "没有可导出的评分任务";
+    public static final String VIEW_LOAD_FAILED = "视图加载失败";
+   }
