@@ -436,7 +436,7 @@ public class ReviewServiceImpl implements ReviewService {
      * @param rubric 评分标准
      * @return 完整拼接后的字符串（包含 Dify 吐出来的所有块）
      */
-    @Override
+
     public String runWorkflowWithCommonFiles(List<String> fileUrls, String rubric) {
         // 检查文件路径列表是否为空
         if (fileUrls.isEmpty()) {
@@ -462,129 +462,6 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     /**
-     * 调用Dify工作流（项目zip模式）
-     * @param zipFilePath 项目zip文件路径
-     * @param rubric 评分标准
-     * @return 完整拼接后的字符串（包含 Dify 吐出来的所有块）
-     */
-    @Override
-    public String runWorkflowWithProjectZip(String zipFilePath, String rubric) {
-        DataConfig dataConfig = ConfigLoader.getConfig().getData();
-        String taskDir = dataConfig.getTotalTask();
-        String resultDir = dataConfig.getResult();
-
-        GradingTask gradingTask = new GradingTask();
-        gradingTask.setId(UUID.randomUUID().toString());
-        gradingTask.setFilePath(zipFilePath);
-        gradingTask.setStatus(GradingTask.STATUS_PROCESSING);
-        gradingTask.setCreateTime(LocalDateTime.now());
-
-        GradingResult gradingResult = new GradingResult();
-        gradingResult.setTaskId(gradingTask.getId());
-        gradingResult.setStatus(1);
-        gradingResult.setCreateTime(LocalDateTime.now());
-
-        // 先解压zip文件，转为md文件并调用Dify工作流
-        try {
-            List<StudentHomework> studentHomeworks = extractFromTotalZip(zipFilePath);
-            // 从zip文件名提取任务名，设置学生总数
-            String zipName = new File(zipFilePath).getName();
-            gradingTask.setTaskName(zipName.endsWith(".zip") ? zipName.substring(0, zipName.length() - 4) : zipName);
-            gradingTask.setTotalStudents(studentHomeworks.size());
-            // 调用Dify工作流
-            // 检查学生作业列表是否为空
-            if (studentHomeworks.isEmpty()) {
-                throw new BusinessException(ErrorCodeConstant.FILE_NOT_FOUND,ErrorConstant.FILES_NOT_FOUND);}
-            Map<String, Object> requestBody  = new HashMap<>();
-            if (null != rubric && !rubric.isEmpty()) {
-                requestBody.put("rubric", rubric);
-            }
-            requestBody.put("upload_filesOFmd", studentHomeworks);
-            requestBody.put("handle_type", "project_zip");
-            log.info("调用Dify工作流");
-            //工作流返回的Markdown字符串，转换为Word文档
-            try {
-                String result = difyClient.runWorkflowBlocking(difyProperty.getApiKey(), requestBody);
-                log.info("Dify工作流成功调用，开始转换为Word文档");
-                Map<String, Object> json = handleProject_zip(result);
-                if (json == null) {
-                    throw new RuntimeException("Dify 返回结果解析失败");
-                }
-                JsonNode outputNode = mapper.valueToTree(json.getOrDefault("reviews", null));
-                ObjectNode resultJson = mapper.createObjectNode();
-                resultJson.set("output", outputNode);
-                String wordJsonStr = mapper.writeValueAsString(resultJson);
-                String wordPath = mdConvertToWord(wordJsonStr).get("wordPath");
-                log.info("开始生成Excel文档");
-                json.remove("reviews");
-                Map<String, String> excelResult = generateExcel(json);
-                String excelPath = excelResult != null ? excelResult.get("excelPath") : null;
-
-                // 构建并持久化学生成绩
-                List<StudentResult> scores = new ArrayList<>();
-                for (Map.Entry<String, Object> entry : json.entrySet()) {
-                    if (entry.getValue() instanceof List<?> list && list.size() >= 2) {
-                        StudentResult score = new StudentResult();
-                        score.setTaskId(gradingTask.getId());
-                        score.setStudentId(entry.getKey());
-                        score.setStudentName(String.valueOf(list.get(0)));
-                        score.setRawScore(String.valueOf(list.get(1)));
-                        score.setStatus("APPROVED");
-                        scores.add(score);
-                    }
-                }
-                gradingTask.setGradedStudents(scores.size());
-                FileUtil.ensureDirExists(resultDir);
-                String scoresPath = resultDir + File.separator + "scores.json";
-                synchronized (FILE_LOCK) {
-                    List<StudentResult> existingScores = FileUtil.exists(scoresPath)
-                            ? FileUtil.readJsonList(scoresPath, StudentResult.class) : new ArrayList<>();
-                    existingScores.addAll(scores);
-                    FileUtil.writeJsonList(scoresPath, existingScores);
-                }
-
-                // 保存处理结果到文件
-                gradingTask.setStatus(GradingTask.STATUS_SUCCESS);
-                gradingTask.setFinishTime(LocalDateTime.now());
-                FileUtil.ensureDirExists(taskDir);
-                appendToJsonList(taskDir , gradingTask, GradingTask.class);
-
-                gradingResult.setStatus(0);
-                gradingResult.setWordPath(wordPath);
-                gradingResult.setExcelPath(excelPath);
-                gradingResult.setExpireTime(LocalDateTime.now().plusDays(7));
-                FileUtil.ensureDirExists(resultDir);
-                appendToJsonList(resultDir , gradingResult, GradingResult.class);
-                return "wordPath=" + wordPath + "&excelPath=" + excelPath;
-
-
-            } catch (BusinessException e) {
-                throw e;
-            } catch (Exception e) {
-                log.error(e.getMessage());
-                throw new BusinessException(ErrorCodeConstant.UNKNOWN_ERROR,ErrorConstant.UNKNOWN_ERROR);
-            }
-        } catch (BusinessException e) {
-            // 所有错误类型都持久化失败任务
-            gradingTask.setStatus(GradingTask.STATUS_FAILED);
-            gradingTask.setErrorMessage(e.getMessage());
-            gradingTask.setRetryCount(0);
-            gradingTask.setFinishTime(LocalDateTime.now());
-            try {
-                FileUtil.ensureDirExists(taskDir);
-                appendToJsonList(taskDir , gradingTask, GradingTask.class);
-            } catch (Exception ex) {
-                log.error("保存失败任务文件异常: {}", ex.getMessage());
-            }
-            throw e;
-        }catch (Exception e) {
-            log.error(e.getMessage());
-            throw new BusinessException(ErrorCodeConstant.UNKNOWN_ERROR,ErrorConstant.UNKNOWN_ERROR);
-        }
-
-    }
-
-    /**
      * 生成Excel文档
      * TODO
      * @param json
@@ -603,7 +480,7 @@ public class ReviewServiceImpl implements ReviewService {
     private <T> void appendToJsonList(String filePath, T element, Class<T> clazz) throws IOException {
         synchronized (FILE_LOCK) {
             List<T> list;
-            if (FileUtil.exists(filePath)) {
+            if (FileUtil.exists(filePath) && filePath.length() > 0) {
                 list = FileUtil.readJsonList(filePath, clazz);
             } else {
                 list = new ArrayList<>();
@@ -866,12 +743,16 @@ public class ReviewServiceImpl implements ReviewService {
         try {
             // 构建请求体，一次性发送整批作业
             Map<String, Object> requestBody = new HashMap<>();
+            Map<String, Object> inputs = new HashMap<>();
             if (rubric != null && !rubric.isEmpty()) {
-                requestBody.put("rubric", rubric);
+                inputs.put("rubric", rubric);
             }
-            requestBody.put("upload_filesOFmd", homeworks);
-            requestBody.put("handle_type", "project_zip");
+            inputs.put("upload_filesOFmd", homeworks);
+            inputs.put("handle_type", "project_zip");
 
+            requestBody.put("inputs", inputs);
+            requestBody.put("user", "test-user");
+            requestBody.put("response_mode", "blocking");   // 改为 blocking
             // 调用 Dify 工作流（阻塞等待返回）
             String response = difyClient.runWorkflowBlocking(difyProperty.getApiKey(), requestBody);
 

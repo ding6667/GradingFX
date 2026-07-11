@@ -1,0 +1,25 @@
+[ {
+  "taskId" : "e47894fb-ebf9-43be-b5e8-4f5d651ae019",
+  "status" : 0,
+  "createTime" : "2026-07-11T18:18:24.0350155",
+  "wordPath" : null,
+  "excelPath" : null,
+  "scoreChanged" : 0,
+  "expireTime" : "2026-07-18T18:18:24.3433619"
+}, {
+  "taskId" : "c9c41989-389c-40cf-a4f5-4bd7d4b4ade9",
+  "status" : 0,
+  "createTime" : "2026-07-11T18:24:41.0728943",
+  "wordPath" : null,
+  "excelPath" : null,
+  "scoreChanged" : 0,
+  "expireTime" : "2026-07-18T18:24:41.1801972"
+}, {
+  "taskId" : "868b6a80-37a9-4186-9c03-1f856830a48c",
+  "status" : 0,
+  "createTime" : "2026-07-11T18:31:21.7124098",
+  "wordPath" : null,
+  "excelPath" : null,
+  "scoreChanged" : 0,
+  "expireTime" : "2026-07-18T18:31:21.8926907"
+} ]

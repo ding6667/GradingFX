@@ -8,6 +8,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -86,7 +87,11 @@ public class FileUtil {
      * 从 JSON 文件读取并反序列化为 List
      */
     public static <T> List<T> readJsonList(String filePath, Class<T> elementClass) throws IOException {
-        return MAPPER.readValue(new File(filePath),
+        File file = new File(filePath);
+        if (!file.exists() || file.length() == 0) {
+            return new ArrayList<>();
+        }
+        return MAPPER.readValue(file,
                 MAPPER.getTypeFactory().constructCollectionType(List.class, elementClass));
     }
 
@@ -94,7 +99,11 @@ public class FileUtil {
      * 从 JSON 文件读取并反序列化为指定 TypeReference（适用于泛型复杂类型）
      */
     public static <T> T readJson(String filePath, TypeReference<T> typeRef) throws IOException {
-        return MAPPER.readValue(new File(filePath), typeRef);
+        File file = new File(filePath);
+        if (!file.exists() || file.length() == 0) {
+            return null;
+        }
+        return MAPPER.readValue(file, typeRef);
     }
 
     // ==================== 二进制序列化读写 ====================
@@ -127,7 +136,7 @@ public class FileUtil {
      * 确保目录存在
      */
     public static void ensureDirExists(String dirPath) throws IOException {
-        Files.createDirectories(Paths.get(dirPath));
+        Files.createDirectories(Paths.get(dirPath).toFile().isFile() ? Paths.get(dirPath).getParent() : Paths.get(dirPath));
     }
 
     /**

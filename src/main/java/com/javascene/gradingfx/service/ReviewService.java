@@ -14,9 +14,6 @@ public interface ReviewService {
     List<GradingTask> loadAllTasks();
     List<StudentResultProperty> loadTask(String taskId);
 
-    String runWorkflowWithCommonFiles(List<String> fileUrls, String rubric);
-    String runWorkflowWithProjectZip(String zipFilePath, String rubric);
-
     // ==================== 多线程批阅引擎 ====================
 
     /**

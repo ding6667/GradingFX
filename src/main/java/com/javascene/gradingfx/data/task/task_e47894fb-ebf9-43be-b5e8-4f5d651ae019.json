@@ -1,0 +1,12 @@
+[ {
+  "taskId" : "e47894fb-ebf9-43be-b5e8-4f5d651ae019",
+  "studentId" : "2484721346",
+  "studentName" : "徐建军",
+  "rawScore" : null,
+  "aiComment" : null,
+  "teacherScore" : null,
+  "teacherComment" : null,
+  "teacherNote" : null,
+  "status" : "FAILED",
+  "errorMessage" : "客户端错误 (400): {\"code\":\"invalid_param\",\"message\":\"upload_filesOFmd in input form must be a dict\",\"status\":400}\n"
+} ]
