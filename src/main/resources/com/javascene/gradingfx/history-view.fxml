@@ -9,22 +9,20 @@
             stylesheets="@styles.css"
             prefWidth="800" prefHeight="600">
 
-    <!-- Top: Title and refresh -->
     <top>
-        <HBox alignment="CENTER_LEFT" spacing="20" styleClass="card">
+        <HBox alignment="CENTER_LEFT" spacing="20" styleClass="header-bar">
             <padding>
-                <Insets bottom="12" left="20" right="20" top="12"/>
+                <Insets bottom="14" left="24" right="24" top="14"/>
             </padding>
             <Label text="历史批阅任务" styleClass="title"/>
             <Region HBox.hgrow="ALWAYS"/>
-            <Button text="刷新" fx:id="refreshBtn" styleClass="secondary-button"
+            <Button text="刷新" fx:id="refreshBtn" styleClass="button"
                     onAction="#handleRefresh"/>
         </HBox>
     </top>
 
-    <!-- Center: History table -->
     <center>
-        <VBox style="-fx-padding: 16;">
+        <VBox style="-fx-padding: 16; -fx-background-color: #F7F8FA;" spacing="12">
             <TableView fx:id="historyTable" VBox.vgrow="ALWAYS">
                 <columns>
                     <TableColumn fx:id="taskNameColumn" text="任务名称" prefWidth="250" sortable="true"/>
@@ -40,17 +38,17 @@
         </VBox>
     </center>
 
-    <!-- Bottom: Action buttons -->
     <bottom>
-        <HBox alignment="CENTER_RIGHT" spacing="12" styleClass="card">
+        <HBox alignment="CENTER_RIGHT" spacing="12"
+              style="-fx-background-color: #FFFFFF; -fx-border-color: #F0F0F0; -fx-border-width: 1px 0 0 0;">
             <padding>
                 <Insets bottom="12" left="20" right="20" top="12"/>
             </padding>
-            <Button text="👁 查看结果" fx:id="viewResultBtn" styleClass="primary-button"
+            <Button text="查看结果" fx:id="viewResultBtn" styleClass="primary-button"
                     onAction="#handleViewResult"/>
             <Button text="重新导出" fx:id="reExportBtn" styleClass="secondary-button"
                     onAction="#handleReExport"/>
-            <Button text="🗑 删除任务" fx:id="deleteTaskBtn" styleClass="danger-button"
+            <Button text="删除任务" fx:id="deleteTaskBtn" styleClass="danger-button"
                     onAction="#handleDeleteTask"/>
         </HBox>
     </bottom>

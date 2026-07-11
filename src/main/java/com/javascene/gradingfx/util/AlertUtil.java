@@ -204,7 +204,7 @@ public class AlertUtil {
         alert.setHeaderText(message);
 
         javafx.scene.control.Label linkLabel = new javafx.scene.control.Label(linkText);
-        linkLabel.setStyle("-fx-text-fill: #4F46E5; -fx-underline: true; -fx-cursor: hand;");
+        linkLabel.setStyle("-fx-text-fill: #1890FF; -fx-underline: true; -fx-cursor: hand;");
         linkLabel.setOnMouseClicked(e -> {
             try {
                 java.awt.Desktop.getDesktop().browse(new java.net.URI(url));

@@ -85,9 +85,9 @@ public interface ReviewService {
     String exportWord(String taskId);
 
     /**
-     * 从 zip 提取学生作业列表
+     * 从 zip 提取学生作业列表（支持并行处理和进度回调）
      */
-    List<StudentHomework> extractFromTotalZip(String totalZipPath) throws Exception;
+    List<StudentHomework> extractFromTotalZip(String totalZipPath, ReviewProgressCallback callback) throws Exception;
 
     /**
      * 批阅进度回调接口
@@ -113,5 +113,13 @@ public interface ReviewService {
          * @param error 错误信息
          */
         void onReviewError(String error);
+
+        /**
+         * 解压/转换阶段的进度回调
+         * @param current 当前处理到的学生序号
+         * @param total 总学生压缩包数
+         * @param studentName 当前处理的学生名（可为 null）
+         */
+        default void onExtractProgress(int current, int total, String studentName) {}
     }
 }

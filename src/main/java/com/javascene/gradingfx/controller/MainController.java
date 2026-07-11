@@ -18,6 +18,7 @@ import com.javascene.gradingfx.util.ConfigLoader;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
@@ -113,7 +114,42 @@ public class MainController {
             }
         });
 
-        loadData();
+        // 异步加载历史数据，避免启动时冻屏
+        Task<List<StudentResultProperty>> loadTask = new Task<>() {
+            @Override
+            protected List<StudentResultProperty> call() {
+                List<GradingTask> gradingTasks = new ArrayList<>(reviewService.loadAllTasks());
+                gradingTasks.sort(Comparator.comparing(GradingTask::getCreateTime).reversed());
+                if (!gradingTasks.isEmpty()) {
+                    String taskId = gradingTasks.get(0).getId();
+                    return new ArrayList<>(reviewService.loadTask(taskId));
+                }
+                return new ArrayList<>();
+            }
+        };
+
+        loadTask.setOnSucceeded(e -> {
+            List<StudentResultProperty> data = loadTask.getValue();
+            studentData.setAll(data);
+            resultTable.setItems(studentData);
+            totalLabel.setText(String.valueOf(studentData.size()));
+
+            long completed = data.stream().filter(r -> r.getStatus() == ReviewStatus.APPROVED).count();
+            long failed = data.stream().filter(r -> r.getStatus() == ReviewStatus.FAILED).count();
+            completedLabel.setText(String.valueOf(completed));
+            failedLabel.setText(String.valueOf(failed));
+
+            setupStudentTree();
+        });
+
+        loadTask.setOnFailed(e -> {
+            log.warn("加载历史数据失败: {}", loadTask.getException() != null ? loadTask.getException().getMessage() : "未知");
+        });
+
+        Thread loadThread = new Thread(loadTask);
+        loadThread.setDaemon(true);
+        loadThread.setName("DataLoad-Thread");
+        loadThread.start();
 
         // 初始状态：无文件，所有控制按钮禁用
         updateButtonStates(false, false);
@@ -216,7 +252,7 @@ public class MainController {
 
     @FXML void handleDragEntered(DragEvent event) {
         if (event.getDragboard().hasFiles()) {
-            uploadArea.setStyle("-fx-border-color: #4F46E5; -fx-border-width: 2; -fx-border-style: dashed; -fx-background-color: #EEF2FF;");
+            uploadArea.setStyle("-fx-border-color: #1890FF; -fx-border-width: 2; -fx-border-style: dashed; -fx-background-color: #E6F7FF;");
         }
         event.consume();
     }
@@ -306,23 +342,44 @@ public class MainController {
         // 清空表格数据，准备新批阅
         studentData.clear();
         progressBar.setProgress(0);
-        progressLabel.setText("准备中...");
+        progressBar.getStyleClass().remove("success");
+        progressLabel.setText("正在解压和转换文档...");
 
         isPaused = false;
         updateButtonStates(true, false);
 
-        // 启动批阅（service 内部创建调度线程，非阻塞）
-        try {
-            currentTaskId = reviewService.startBatchReviewFromZip(zipPath, rubric, createProgressCallback());
+        // 在后台线程执行解压和文档转换，避免 UI 冻屏
+        Task<String> startTask = new Task<>() {
+            @Override
+            protected String call() throws Exception {
+                return reviewService.startBatchReviewFromZip(zipPath, rubric, createProgressCallback());
+            }
+        };
+
+        startTask.setOnSucceeded(e -> {
+            currentTaskId = startTask.getValue();
             if (currentTaskId == null) {
                 updateButtonStates(false, false);
+                progressLabel.setText("启动失败");
+            } else {
+                progressLabel.setText("批阅中...");
             }
-        } catch (Exception e) {
-            log.error("启动批阅失败: {}", e.getMessage(), e);
-            progressLabel.setText(ErrorMessageConstant.REVIEW_ERROR_PREFIX + e.getMessage());
-            updateButtonStates(false, false);
-            AlertUtil.showError(ErrorMessageConstant.REVIEW_ERROR_PREFIX + e.getMessage());
-        }
+        });
+
+        startTask.setOnFailed(e -> {
+            Throwable ex = startTask.getException();
+            log.error("启动批阅失败: {}", ex != null ? ex.getMessage() : "未知错误", ex);
+            Platform.runLater(() -> {
+                progressLabel.setText(ErrorMessageConstant.REVIEW_ERROR_PREFIX + (ex != null ? ex.getMessage() : "未知错误"));
+                updateButtonStates(false, false);
+                AlertUtil.showError(ErrorMessageConstant.REVIEW_ERROR_PREFIX + (ex != null ? ex.getMessage() : "未知错误"));
+            });
+        });
+
+        Thread thread = new Thread(startTask);
+        thread.setDaemon(true);
+        thread.setName("BatchStart-Thread");
+        thread.start();
     }
 
     @FXML void handlePause() {
@@ -350,7 +407,34 @@ public class MainController {
         String rubric = standardService.getCurrentStandard();
         isPaused = false;
         updateButtonStates(true, false);
-        reviewService.retryFailed(currentTaskId, rubric, createProgressCallback());
+        progressLabel.setText("正在加载重试数据...");
+
+        // 在后台线程执行重试初始化，避免 UI 冻屏
+        Task<Void> retryTask = new Task<>() {
+            @Override
+            protected Void call() {
+                reviewService.retryFailed(currentTaskId, rubric, createProgressCallback());
+                return null;
+            }
+        };
+
+        retryTask.setOnSucceeded(e -> {
+            progressLabel.setText("重试批阅中...");
+        });
+
+        retryTask.setOnFailed(e -> {
+            Throwable ex = retryTask.getException();
+            log.error("重试失败: {}", ex != null ? ex.getMessage() : "未知错误", ex);
+            Platform.runLater(() -> {
+                progressLabel.setText("重试失败: " + (ex != null ? ex.getMessage() : "未知错误"));
+                updateButtonStates(false, false);
+            });
+        });
+
+        Thread thread = new Thread(retryTask);
+        thread.setDaemon(true);
+        thread.setName("RetryStart-Thread");
+        thread.start();
     }
 
     /**
@@ -361,8 +445,8 @@ public class MainController {
             @Override
             public void onBatchCompleted(int completed, int failed, int total, List<StudentResult> batchResults) {
                 Platform.runLater(() -> {
-                    // 更新进度条
-                    double progress = (double) (completed + failed) / total;
+                    // 解压占 0~0.3，批阅占 0.3~1.0
+                    double progress = 0.3 + (double) (completed + failed) / total * 0.7;
                     progressBar.setProgress(progress);
                     progressLabel.setText(String.format("已完成 %d / %d （成功 %d，失败 %d）",
                             completed + failed, total, completed, failed));
@@ -386,6 +470,9 @@ public class MainController {
             public void onReviewFinished(List<StudentResult> allResults) {
                 Platform.runLater(() -> {
                     progressBar.setProgress(1.0);
+                    if (!progressBar.getStyleClass().contains("success")) {
+                        progressBar.getStyleClass().add("success");
+                    }
                     progressLabel.setText("批阅完成");
                     isPaused = false;
                     updateButtonStates(false, false);
@@ -408,6 +495,16 @@ public class MainController {
                     updateButtonStates(false, false);
                     AlertUtil.showError(ErrorMessageConstant.REVIEW_ERROR_PREFIX + error);
                     refresh();
+                });
+            }
+
+            @Override
+            public void onExtractProgress(int current, int total, String studentName) {
+                Platform.runLater(() -> {
+                    double progress = (double) current / total * 0.3; // 解压占 30%
+                    progressBar.setProgress(progress);
+                    String name = studentName != null ? studentName : "";
+                    progressLabel.setText(String.format("正在解压和转换文档... %d/%d %s", current, total, name));
                 });
             }
         };

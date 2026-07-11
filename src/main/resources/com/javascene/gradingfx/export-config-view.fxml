@@ -7,17 +7,15 @@
 <AnchorPane xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="com.javascene.gradingfx.controller.ExportController"
             stylesheets="@styles.css"
-            prefWidth="500" prefHeight="350">
+            prefWidth="520" prefHeight="360">
 
-    <VBox spacing="16" AnchorPane.topAnchor="0" AnchorPane.bottomAnchor="0"
+    <VBox spacing="20" AnchorPane.topAnchor="0" AnchorPane.bottomAnchor="0"
           AnchorPane.leftAnchor="0" AnchorPane.rightAnchor="0"
-          style="-fx-padding: 20;">
+          style="-fx-padding: 24; -fx-background-color: #F7F8FA;">
 
-        <!-- Title -->
         <Label text="导出路径配置" styleClass="title"/>
 
-        <!-- Save path -->
-        <VBox spacing="8" styleClass="card">
+        <VBox spacing="8" styleClass="card" style="-fx-padding: 16px;">
             <Label text="保存路径" styleClass="subtitle"/>
             <HBox spacing="8" alignment="CENTER_LEFT">
                 <TextField fx:id="pathField" HBox.hgrow="ALWAYS"
@@ -27,15 +25,15 @@
             </HBox>
         </VBox>
 
-        <!-- File name template -->
-        <VBox spacing="8" styleClass="card">
+        <VBox spacing="8" styleClass="card" style="-fx-padding: 16px;">
             <Label text="文件名模板" styleClass="subtitle"/>
             <TextField fx:id="fileNameField" promptText="例如: 作业成绩_{date}_{taskName}"/>
             <Label text="可用变量: {date} 日期, {taskName} 任务名称"
                    styleClass="secondary" wrapText="true"/>
         </VBox>
 
-        <!-- Bottom buttons -->
+        <Region VBox.vgrow="ALWAYS"/>
+
         <HBox spacing="12" alignment="CENTER_RIGHT">
             <Button text="保存" fx:id="saveBtn" styleClass="primary-button"
                     onAction="#handleSave"/>

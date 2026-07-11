@@ -91,10 +91,10 @@ public class HistoryController {
                 HistoryTask task = getTableRow() != null ? getTableRow().getItem() : null;
                 if (task != null && task.getStatus() != null) {
                     setStyle("-fx-text-fill: " + switch (task.getStatus()) {
-                        case COMPLETED -> "#10B981";
-                        case GRADING -> "#F59E0B";
-                        case FAILED, PARTIAL_FAILURE -> "#EF4444";
-                        default -> "#64748B";
+                        case COMPLETED -> "#52C41A";
+                        case GRADING -> "#FAAD14";
+                        case FAILED, PARTIAL_FAILURE -> "#FF4D4F";
+                        default -> "#8C8C8C";
                     } + "; -fx-font-weight: bold;");
                 } else {
                     setStyle("");
@@ -108,7 +108,7 @@ public class HistoryController {
             private final Button viewBtn = new Button("查看");
             private final HBox box = new HBox(6, viewBtn);
             {
-                viewBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #4F46E5;"
+                viewBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #1890FF;"
                         + " -fx-cursor: hand; -fx-font-weight: bold; -fx-padding: 2 8;");
                 viewBtn.setOnAction(e -> {
                     HistoryTask task = getTableRow() != null ? getTableRow().getItem() : null;

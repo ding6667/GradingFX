@@ -103,32 +103,73 @@ public class ReviewServiceImpl implements ReviewService {
      * @return 学生作业信息列表
      * @throws Exception 处理异常
      */
-    public List<StudentHomework> extractFromTotalZip(String totalZipPath) throws Exception {
+    public List<StudentHomework> extractFromTotalZip(String totalZipPath,
+                                                      ReviewService.ReviewProgressCallback callback) throws Exception {
         Path tempRoot = Files.createTempDirectory("total_zip_" + UUID.randomUUID().toString());
-        List<StudentHomework> results = new ArrayList<>();
+        List<StudentHomework> results = Collections.synchronizedList(new ArrayList<>());
 
         try {
             // 1. 解压总压缩包
             ZipUtil.unzip(totalZipPath, tempRoot.toFile());
 
-            // 2. 遍历解压后的根目录，查找所有学生压缩包
+            // 2. 收集所有学生压缩包
             File[] files = tempRoot.toFile().listFiles();
             if (files == null) return results;
 
+            List<File> zipFiles = new ArrayList<>();
             for (File file : files) {
                 if (file.isFile() && file.getName().toLowerCase().endsWith(".zip")) {
-                    try {
-                        StudentHomework homework = processStudentZip(file.getAbsolutePath());
-                        if (homework != null) {
-                            results.add(homework);
-                        }
-                    } catch (Exception e) {
-                        log.error("处理学生压缩包失败: {}, 原因: {}", file.getName(), e.getMessage());
-                    }
+                    zipFiles.add(file);
                 }
             }
+
+            if (zipFiles.isEmpty()) return results;
+
+            int total = zipFiles.size();
+            log.info("发现 {} 个学生压缩包，开始并行解压和转换", total);
+
+            // 3. 并行处理（线程数 = min(学生数, CPU核心数, 4)）
+            int threads = Math.min(total, Math.min(Runtime.getRuntime().availableProcessors(), 4));
+            java.util.concurrent.ExecutorService executor =
+                    java.util.concurrent.Executors.newFixedThreadPool(threads);
+
+            java.util.concurrent.atomic.AtomicInteger completed = new java.util.concurrent.atomic.AtomicInteger(0);
+            List<java.util.concurrent.Future<StudentHomework>> futures = new ArrayList<>();
+
+            for (File file : zipFiles) {
+                futures.add(executor.submit(() -> {
+                    try {
+                        StudentHomework hw = processStudentZip(file.getAbsolutePath());
+                        int done = completed.incrementAndGet();
+                        if (callback != null) {
+                            callback.onExtractProgress(done, total,
+                                    hw != null ? hw.getStudentName() : file.getName());
+                        }
+                        return hw;
+                    } catch (Exception e) {
+                        completed.incrementAndGet();
+                        log.error("处理学生压缩包失败: {}, 原因: {}", file.getName(), e.getMessage());
+                        return null;
+                    }
+                }));
+            }
+
+            // 4. 收集结果
+            for (java.util.concurrent.Future<StudentHomework> future : futures) {
+                try {
+                    StudentHomework hw = future.get(300, java.util.concurrent.TimeUnit.SECONDS);
+                    if (hw != null) {
+                        results.add(hw);
+                    }
+                } catch (Exception e) {
+                    log.error("等待学生处理结果超时: {}", e.getMessage());
+                }
+            }
+
+            executor.shutdown();
+            log.info("解压完成，成功处理 {}/{} 个学生", results.size(), total);
+
         } finally {
-            // 清理临时目录
             FileUtils.deleteDirectory(tempRoot.toFile());
         }
         return results;
@@ -533,7 +574,7 @@ public class ReviewServiceImpl implements ReviewService {
         task.setTaskName(zipName.endsWith(".zip") ? zipName.substring(0, zipName.length() - 4) : zipName);
 
         try {
-            List<StudentHomework> homeworks = extractFromTotalZip(zipFilePath);
+            List<StudentHomework> homeworks = extractFromTotalZip(zipFilePath, callback);
             task.setTotalStudents(homeworks.size());
 
             if (homeworks.isEmpty()) {

@@ -11,24 +11,24 @@
 
     <!-- Top: Header bar -->
     <top>
-        <HBox alignment="CENTER_LEFT" spacing="20" styleClass="card">
+        <HBox alignment="CENTER_LEFT" spacing="20" styleClass="header-bar">
             <padding>
-                <Insets bottom="12" left="24" right="24" top="12"/>
+                <Insets bottom="14" left="24" right="24" top="14"/>
             </padding>
             <Label text="作业批阅工作台" styleClass="title"/>
             <Region HBox.hgrow="ALWAYS"/>
-            <Button text="导出路径配置" fx:id="exportConfigBtn" styleClass="secondary-button"
+            <Button text="导出路径配置" fx:id="exportConfigBtn" styleClass="button"
                     onAction="#handleOpenExportConfig"/>
-            <Button text="评分标准" fx:id="standardBtn" styleClass="secondary-button"
+            <Button text="评分标准" fx:id="standardBtn" styleClass="button"
                     onAction="#handleOpenStandard"/>
-            <Button text="历史记录" fx:id="historyBtn" styleClass="secondary-button"
+            <Button text="历史记录" fx:id="historyBtn" styleClass="button"
                     onAction="#handleOpenHistory"/>
         </HBox>
     </top>
 
     <!-- Left: Upload and student tree -->
     <left>
-        <VBox spacing="12" prefWidth="280" style="-fx-padding: 12;">
+        <VBox spacing="12" prefWidth="280" style="-fx-padding: 12; -fx-background-color: #F7F8FA;">
             <!-- Upload area -->
             <Label text="上传文件" styleClass="subtitle"/>
             <StackPane fx:id="uploadArea" styleClass="upload-area"
@@ -38,10 +38,11 @@
                        onDragEntered="#handleDragEntered"
                        onDragExited="#handleDragExited"
                        onMouseClicked="#handleUploadClick">
-                <VBox alignment="CENTER" spacing="4">
-                    <Label text="📄" style="-fx-font-size: 28px;"/>
-                    <Label text="拖拽 ZIP 包至此" wrapText="true" style="-fx-font-size: 12px;"/>
-                    <Label text="或点击选择文件" styleClass="secondary" style="-fx-font-size: 11px;"/>
+                <VBox alignment="CENTER" spacing="6">
+                    <Label text="&#128194;" style="-fx-font-size: 28px; -fx-text-fill: #1890FF;"/>
+                    <Label text="拖拽 ZIP 包至此" wrapText="true"
+                           style="-fx-font-size: 13px; -fx-font-weight: 500; -fx-text-fill: #434343;"/>
+                    <Label text="或点击选择文件" style="-fx-font-size: 11px; -fx-text-fill: #BFBFBF;"/>
                 </VBox>
             </StackPane>
 
@@ -51,13 +52,12 @@
                 <padding><Insets top="10" right="12" bottom="10" left="12"/></padding>
                 <spacing>6</spacing>
                 <HBox alignment="CENTER_LEFT" spacing="8">
-                    <Label text="📎 已选中文件" style="-fx-font-size: 13px; -fx-font-weight: 600;"/>
+                    <Label text="&#128206; 已选中文件" style="-fx-font-size: 13px; -fx-font-weight: 600; -fx-text-fill: #1890FF;"/>
                     <Region HBox.hgrow="ALWAYS"/>
                     <Button text="清除" fx:id="clearFilesBtn" styleClass="secondary-button"
                             onAction="#handleClearFiles" style="-fx-font-size: 12px; -fx-padding: 4px 10px;"/>
                 </HBox>
-                <ListView fx:id="selectedFilesList" prefHeight="80" VBox.vgrow="ALWAYS"
-                          style="-fx-font-size: 12px;"/>
+                <ListView fx:id="selectedFilesList" prefHeight="80" VBox.vgrow="ALWAYS"/>
             </VBox>
 
             <!-- Student tree -->
@@ -68,38 +68,37 @@
 
     <!-- Center: Statistics and results -->
     <center>
-        <VBox spacing="10" style="-fx-padding: 0 12 12 0;">
+        <VBox spacing="12" style="-fx-padding: 0 12 12 0; -fx-background-color: #F7F8FA;">
             <!-- Statistics cards -->
             <HBox spacing="12">
-                <VBox styleClass="card" prefWidth="180">
-                    <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
-                    <Label text="总人数" styleClass="secondary" style="-fx-font-size: 12px;"/>
-                    <Label fx:id="totalLabel" text="0" style="-fx-font-size: 24px; -fx-font-weight: 700; -fx-text-fill: #4F46E5;"/>
+                <VBox styleClass="stat-card" prefWidth="180">
+                    <Label text="总人数" styleClass="secondary"/>
+                    <Label fx:id="totalLabel" text="0"
+                           style="-fx-font-size: 28px; -fx-font-weight: 700; -fx-text-fill: #1890FF;"/>
                 </VBox>
-                <VBox styleClass="card" prefWidth="180">
-                    <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
-                    <Label text="已完成" styleClass="secondary" style="-fx-font-size: 12px;"/>
-                    <Label fx:id="completedLabel" text="0" style="-fx-font-size: 24px; -fx-font-weight: 700; -fx-text-fill: #10B981;"/>
+                <VBox styleClass="stat-card-green" prefWidth="180">
+                    <Label text="已完成" styleClass="secondary"/>
+                    <Label fx:id="completedLabel" text="0"
+                           style="-fx-font-size: 28px; -fx-font-weight: 700; -fx-text-fill: #52C41A;"/>
                 </VBox>
-                <VBox styleClass="card" prefWidth="180">
-                    <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
-                    <Label text="失败" styleClass="secondary" style="-fx-font-size: 12px;"/>
-                    <Label fx:id="failedLabel" text="0" style="-fx-font-size: 24px; -fx-font-weight: 700; -fx-text-fill: #EF4444;"/>
+                <VBox styleClass="stat-card-red" prefWidth="180">
+                    <Label text="失败" styleClass="secondary"/>
+                    <Label fx:id="failedLabel" text="0"
+                           style="-fx-font-size: 28px; -fx-font-weight: 700; -fx-text-fill: #FF4D4F;"/>
                 </VBox>
             </HBox>
 
             <!-- Progress -->
-            <VBox spacing="4" styleClass="card">
-                <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
-                <HBox alignment="CENTER_LEFT" spacing="8">
-                    <Label text="批阅进度:" style="-fx-font-size: 13px;"/>
-                    <Label fx:id="progressLabel" text="0%" style="-fx-font-size: 14px; -fx-font-weight: 700; -fx-text-fill: #4F46E5;"/>
-                </HBox>
-                <ProgressBar fx:id="progressBar" progress="0.0" prefHeight="6"/>
-            </VBox>
+            <HBox spacing="10" alignment="CENTER_LEFT" styleClass="card" style="-fx-padding: 8px 14px;">
+                <Label text="批阅进度" style="-fx-font-size: 12px; -fx-font-weight: 600; -fx-text-fill: #8C8C8C;"/>
+                <ProgressBar fx:id="progressBar" progress="0.0" prefHeight="6" prefWidth="200"
+                             HBox.hgrow="ALWAYS" style="-fx-accent: #52C41A;"/>
+                <Label fx:id="progressLabel" text="0%"
+                       style="-fx-font-size: 12px; -fx-font-weight: 700; -fx-text-fill: #52C41A;"/>
+            </HBox>
 
             <!-- Control buttons -->
-            <HBox spacing="8" alignment="CENTER_LEFT">
+            <HBox spacing="8" alignment="CENTER_LEFT" style="-fx-padding: 4px 0;">
                 <Button text="开始批阅" fx:id="startBtn" styleClass="primary-button"
                         onAction="#handleStart"/>
                 <Button text="暂停" fx:id="pauseBtn" styleClass="secondary-button"
@@ -135,7 +134,8 @@
 
     <!-- Bottom: Export buttons -->
     <bottom>
-        <HBox alignment="CENTER_RIGHT" spacing="12" styleClass="card">
+        <HBox alignment="CENTER_RIGHT" spacing="12"
+              style="-fx-background-color: #FFFFFF; -fx-border-color: #F0F0F0; -fx-border-width: 1px 0 0 0;">
             <padding>
                 <Insets bottom="10" left="20" right="20" top="10"/>
             </padding>

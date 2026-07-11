@@ -11,49 +11,42 @@
       prefWidth="600" prefHeight="500">
 
     <padding>
-        <Insets bottom="20" left="20" right="20" top="20"/>
+        <Insets bottom="24" left="24" right="24" top="24"/>
     </padding>
 
-    <!-- Title -->
     <Label text="评分标准配置" styleClass="title"/>
 
-    <!-- Standard text area -->
     <VBox VBox.vgrow="ALWAYS" spacing="8">
-        <Label text="评分标准内容：" styleClass="subtitle"/>
+        <Label text="评分标准内容" styleClass="subtitle"/>
         <TextArea fx:id="standardTextArea" wrapText="true" prefHeight="200"
                   promptText="在此输入或粘贴评分标准..."/>
     </VBox>
 
-    <!-- Template toolbar -->
     <VBox spacing="12">
         <Separator/>
         <Label text="模板管理" styleClass="subtitle"/>
 
-        <!-- Load default template -->
         <HBox spacing="12" alignment="CENTER_LEFT">
             <Button text="加载默认模板" fx:id="loadDefaultBtn" styleClass="secondary-button"
                     onAction="#handleLoadDefault"/>
         </HBox>
 
-        <!-- Save template -->
         <HBox spacing="12" alignment="CENTER_LEFT">
             <TextField fx:id="templateNameField" promptText="输入模板名称..." prefWidth="200"/>
             <Button text="保存为模板" fx:id="saveTemplateBtn" styleClass="primary-button"
                     onAction="#handleSaveTemplate"/>
         </HBox>
 
-        <!-- Template combo -->
         <HBox spacing="12" alignment="CENTER_LEFT">
             <Label text="已保存模板:"/>
             <ComboBox fx:id="templateCombo" prefWidth="250"/>
             <Button text="加载" fx:id="loadTemplateBtn" styleClass="secondary-button"
                     onAction="#handleLoadTemplate"/>
-            <Button text="🗑 删除" fx:id="deleteTemplateBtn" styleClass="danger-button"
+            <Button text="删除" fx:id="deleteTemplateBtn" styleClass="danger-button"
                     onAction="#handleDeleteTemplate"/>
         </HBox>
     </VBox>
 
-    <!-- Bottom buttons -->
     <HBox spacing="12" alignment="CENTER_RIGHT">
         <Button text="保存并关闭" fx:id="saveCloseBtn" styleClass="primary-button"
                 onAction="#handleSaveAndClose"/>
