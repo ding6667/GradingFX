@@ -1,7 +1,9 @@
 package com.javascene.gradingfx.service.Impl;
 
+import com.javascene.gradingfx.config.property.AppConfig;
 import com.javascene.gradingfx.model.StudentResult;
 import com.javascene.gradingfx.service.ExportService;
+import com.javascene.gradingfx.util.ConfigLoader;
 import com.javascene.gradingfx.util.FileUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
@@ -25,6 +27,7 @@ import java.util.List;
 public class ExportServiceImpl implements ExportService {
 
     private static final String[] EXCEL_HEADERS = {"学号", "姓名", "AI评分", "教师评分", "状态", "错误信息"};
+    private final AppConfig  appConfig = ConfigLoader.getConfig();
 
     @Override
     public void exportExcel(List<StudentResult> students, String outputPath) {
@@ -169,6 +172,18 @@ public class ExportServiceImpl implements ExportService {
         } catch (IOException e) {
             log.error("生成 TXT 失败 [{}]: {}", outputPath, e.getMessage());
         }
+    }
+
+    @Override
+    public String exportWord(String taskId) {
+        // 实际导出逻辑由 ReviewServiceImpl.exportWord(taskId) 处理
+        return null;
+    }
+
+    @Override
+    public String exportExcel(String taskId) {
+        // 实际导出逻辑由 ReviewServiceImpl.exportExcel(taskId) 处理
+        return null;
     }
 
     // ==================== 私有工具方法 ====================

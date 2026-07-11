@@ -37,7 +37,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class MainController {
 
     @FXML private StackPane uploadArea;
@@ -57,6 +59,7 @@ public class MainController {
     @FXML private Button detailBtn;
     @FXML private Button exportExcelBtn;
     @FXML private Button exportWordBtn;
+    @FXML private Button exportConfigBtn;
     @FXML private Button standardBtn;
     @FXML private Button historyBtn;
 
@@ -81,6 +84,9 @@ public class MainController {
 
     /** 当前批阅任务ID */
     private String currentTaskId = null;
+
+    /** 当前是否暂停 */
+    private boolean isPaused = false;
 
 
     @FXML
@@ -108,6 +114,9 @@ public class MainController {
         });
 
         loadData();
+
+        // 初始状态：无文件，所有控制按钮禁用
+        updateButtonStates(false, false);
     }
 
     private void loadData() {
@@ -166,12 +175,23 @@ public class MainController {
         studentTree.setShowRoot(false);
     }
 
+    @FXML void handleOpenExportConfig() {
+        showView("export-config-view.fxml", "导出路径配置", o -> {});
+    }
+
     @FXML void handleOpenStandard() {
         showView("standard-view.fxml", "设置评分标准",o -> {});
     }
 
     @FXML void handleOpenHistory() {
-        showView("history-view.fxml", "查看历史记录",o -> {});
+        showView("history-view.fxml", "查看历史记录", controller -> {
+            if (controller instanceof HistoryController hc) {
+                hc.setOnResultSelected(taskId -> {
+                    // showView 关闭后在 refresh 之后执行
+                    javafx.application.Platform.runLater(() -> loadResults(taskId));
+                });
+            }
+        });
     }
 
     @FXML void handleUploadClick() {
@@ -224,12 +244,14 @@ public class MainController {
     @FXML void handleClearFiles() {
         selectedFileObjects.clear();
         updateSelectedFilesArea();
+        updateButtonStates(reviewService.isReviewRunning(), isPaused);
     }
 
     private void handleSelectedFile(File file) {
         if (!selectedFileObjects.contains(file)) {
             selectedFileObjects.add(file);
             updateSelectedFilesArea();
+            updateButtonStates(reviewService.isReviewRunning(), isPaused);
             System.out.println("已选择文件: " + file.getAbsolutePath());
         }
     }
@@ -274,7 +296,7 @@ public class MainController {
             return;
         }
         if (reviewService.isReviewRunning()) {
-            AlertUtil.showError("批阅任务正在运行中，请先停止当前任务");
+            AlertUtil.showError(ErrorMessageConstant.REVIEW_RUNNING);
             return;
         }
 
@@ -286,6 +308,7 @@ public class MainController {
         progressBar.setProgress(0);
         progressLabel.setText("准备中...");
 
+        isPaused = false;
         updateButtonStates(true, false);
 
         // 启动批阅（service 内部创建调度线程，非阻塞）
@@ -294,25 +317,28 @@ public class MainController {
 
     @FXML void handlePause() {
         reviewService.pauseReview();
+        isPaused = true;
         updateButtonStates(true, true);
     }
 
     @FXML void handleResume() {
         reviewService.resumeReview();
+        isPaused = false;
         updateButtonStates(true, false);
     }
 
     @FXML void handleRetry() {
         if (currentTaskId == null) {
-            AlertUtil.showError("没有可重试的任务");
+            AlertUtil.showError(ErrorMessageConstant.NO_TASK_TO_RETRY);
             return;
         }
         if (reviewService.isReviewRunning()) {
-            AlertUtil.showError("批阅任务正在运行中，无法重试");
+            AlertUtil.showError(ErrorMessageConstant.REVIEW_RUNNING_CANNOT_RETRY);
             return;
         }
 
         String rubric = standardService.getCurrentStandard();
+        isPaused = false;
         updateButtonStates(true, false);
         reviewService.retryFailed(currentTaskId, rubric, createProgressCallback());
     }
@@ -351,6 +377,7 @@ public class MainController {
                 Platform.runLater(() -> {
                     progressBar.setProgress(1.0);
                     progressLabel.setText("批阅完成");
+                    isPaused = false;
                     updateButtonStates(false, false);
 
                     // 刷新整个表格
@@ -366,9 +393,10 @@ public class MainController {
             @Override
             public void onReviewError(String error) {
                 Platform.runLater(() -> {
-                    progressLabel.setText("批阅异常: " + error);
+                    progressLabel.setText(ErrorMessageConstant.REVIEW_ERROR_PREFIX + error);
+                    isPaused = false;
                     updateButtonStates(false, false);
-                    AlertUtil.showError("批阅异常: " + error);
+                    AlertUtil.showError(ErrorMessageConstant.REVIEW_ERROR_PREFIX + error);
                     refresh();
                 });
             }
@@ -416,27 +444,74 @@ public class MainController {
 
     /**
      * 更新按钮状态
+     * @param running 是否正在批阅
+     * @param paused 是否暂停
      */
     private void updateButtonStates(boolean running, boolean paused) {
-        startBtn.setDisable(running);
-        pauseBtn.setDisable(!running || paused);
-        resumeBtn.setDisable(!paused);
-        retryBtn.setDisable(running);
+        boolean hasFile = !selectedFileObjects.isEmpty();
+
+        // 未上传文件时所有控制按钮禁用
+        startBtn.setDisable(!hasFile || running);
+        pauseBtn.setDisable(!hasFile || !running || paused);
+        resumeBtn.setDisable(!hasFile || !paused);
+        retryBtn.setDisable(!hasFile || running || currentTaskId == null);
     }
 
     @FXML void handleViewDetail() {
         StudentResultProperty selected = resultTable.getSelectionModel().getSelectedItem();
-        if (selected != null) {
-            System.out.println("View detail for: " + selected.getName());
+        if (selected == null) {
+            AlertUtil.showError(ErrorMessageConstant.FILE_NOT_SELECTED);
+            return;
         }
+        showView("result-detail-view.fxml", "查看详情", controller -> {
+            ((ResultDetailController) controller).setStudentResult(selected, currentTaskId);
+        });
     }
 
     @FXML void handleExportExcel() {
-
+        if (currentTaskId == null) {
+            AlertUtil.showError(ErrorMessageConstant.NO_TASK_TO_EXPORT);
+            return;
+        }
+        String taskId = currentTaskId;
+        javafx.concurrent.Task<String> task = new javafx.concurrent.Task<>() {
+            @Override protected String call() { return reviewService.exportExcel(taskId); }
+        };
+        task.setOnSucceeded(e -> {
+            String path = task.getValue();
+            if (path != null) {
+                AlertUtil.showInfo("Excel 导出成功", "文件路径: " + path);
+            } else {
+                AlertUtil.showError(ErrorMessageConstant.EXPORT_DATA_NOT_FOUND);
+            }
+        });
+        task.setOnFailed(e -> AlertUtil.showError("导出失败: " + task.getException().getMessage()));
+        Thread t = new Thread(task);
+        t.setDaemon(true);
+        t.start();
     }
 
     @FXML void handleExportWord() {
-
+        if (currentTaskId == null) {
+            AlertUtil.showError(ErrorMessageConstant.NO_TASK_TO_EXPORT);
+            return;
+        }
+        String taskId = currentTaskId;
+        javafx.concurrent.Task<String> task = new javafx.concurrent.Task<>() {
+            @Override protected String call() { return reviewService.exportWord(taskId); }
+        };
+        task.setOnSucceeded(e -> {
+            String path = task.getValue();
+            if (path != null) {
+                AlertUtil.showInfo("Word 导出成功", "文件路径: " + path);
+            } else {
+                AlertUtil.showError(ErrorMessageConstant.EXPORT_DATA_NOT_FOUND);
+            }
+        });
+        task.setOnFailed(e -> AlertUtil.showError("导出失败: " + task.getException().getMessage()));
+        Thread t = new Thread(task);
+        t.setDaemon(true);
+        t.start();
     }
 
     // 弹窗显示视图并刷新数据
@@ -455,7 +530,8 @@ public class MainController {
 
             refresh();
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("加载视图失败: {}", e.getMessage(), e);
+            AlertUtil.showError(ErrorMessageConstant.VIEW_LOAD_FAILED);
         }
     }
 

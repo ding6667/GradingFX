@@ -26,4 +26,20 @@ public interface ExportService {
      * @param outputPath 输出路径（含文件名，如 {resultPath}/{taskId}/{studentId}.txt）
      */
     void exportTxt(StudentResult student, String outputPath);
+
+    /**
+     * 为单个任务导出 Word 文件,main界面交互
+     * @param taskId 任务ID
+     * @return 导出的 Word 文件路径（含文件名，如 {resultPath}/{taskId}/summary.docx），失败则返回null
+     */
+    String exportWord(String taskId);
+
+    /**
+     * 为单个任务导出 Excel 文件,main界面交互
+     * @param taskId 任务ID
+     * @return 导出的 Excel 文件路径（含文件名，如 {resultPath}/{taskId}/summary.xlsx），失败则返回null
+     */
+    String exportExcel(String taskId);
+
+
 }

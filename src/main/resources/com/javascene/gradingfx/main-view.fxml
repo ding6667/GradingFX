@@ -17,6 +17,8 @@
             </padding>
             <Label text="作业批阅工作台" styleClass="title"/>
             <Region HBox.hgrow="ALWAYS"/>
+            <Button text="导出路径配置" fx:id="exportConfigBtn" styleClass="secondary-button"
+                    onAction="#handleOpenExportConfig"/>
             <Button text="评分标准" fx:id="standardBtn" styleClass="secondary-button"
                     onAction="#handleOpenStandard"/>
             <Button text="历史记录" fx:id="historyBtn" styleClass="secondary-button"

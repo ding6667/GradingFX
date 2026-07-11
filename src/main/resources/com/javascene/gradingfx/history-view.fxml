@@ -29,7 +29,7 @@
                 <columns>
                     <TableColumn fx:id="taskNameColumn" text="任务名称" prefWidth="250" sortable="true"/>
                     <TableColumn fx:id="taskTimeColumn" text="批阅时间" prefWidth="180" sortable="true"/>
-                    <TableColumn fx:id="studentCountColumn" text="学生总数" prefWidth="100" sortable="true"/>
+                    <TableColumn fx:id="studentCountColumn" text="批阅进度" prefWidth="100" sortable="true"/>
                     <TableColumn fx:id="taskStatusColumn" text="完成状态" prefWidth="120" sortable="true"/>
                     <TableColumn fx:id="operationColumn" text="操作" prefWidth="150" sortable="false"/>
                 </columns>

@@ -21,6 +21,8 @@ public class GradingResult {
     private String wordPath;
     /** Excel成绩表文件路径（可能为null，Excel功能未实现时） */
     private String excelPath;
+    /** 评分变更标记：0=未变更, 1=已变更（导出Excel时需重新生成） */
+    private int scoreChanged = 0;
     /** 结果过期时间（默认创建后7天） */
     private LocalDateTime expireTime;
 }

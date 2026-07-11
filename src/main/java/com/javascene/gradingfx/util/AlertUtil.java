@@ -41,14 +41,14 @@ public class AlertUtil {
      * 显示成功提示弹窗
      */
     public static void showSuccess(String message) {
-        showAlert(Alert.AlertType.INFORMATION, "✅ 成功", message);
+        showAlert(Alert.AlertType.INFORMATION, "成功", message);
     }
 
     /**
      * 显示成功提示弹窗（自定义标题）
      */
     public static void showSuccess(String title, String message) {
-        showAlert(Alert.AlertType.INFORMATION, "✅ " + title, message);
+        showAlert(Alert.AlertType.INFORMATION, title, message);
     }
 
     // ==================== 警告弹窗 ====================
@@ -57,7 +57,7 @@ public class AlertUtil {
      * 显示警告弹窗
      */
     public static void showWarning(String message) {
-        showAlert(Alert.AlertType.WARNING, "⚠️ 警告", message);
+        showAlert(Alert.AlertType.WARNING, "警告", message);
     }
 
     /**
@@ -73,21 +73,21 @@ public class AlertUtil {
      * 显示错误弹窗
      */
     public static void showError(String message) {
-        showAlert(Alert.AlertType.ERROR, "❌ 错误", message);
+        showAlert(Alert.AlertType.ERROR, "错误", message);
     }
 
     /**
      * 显示错误弹窗（自定义标题）
      */
     public static void showError(String title, String message) {
-        showAlert(Alert.AlertType.ERROR, "❌ " + title, message);
+        showAlert(Alert.AlertType.ERROR, title, message);
     }
 
     /**
      * 显示错误弹窗（包含异常信息）
      */
     public static void showError(String message, Throwable exception) {
-        showAlert(Alert.AlertType.ERROR, "❌ 错误", message, exception);
+        showAlert(Alert.AlertType.ERROR, "错误", message, exception);
     }
 
     // ==================== 确认弹窗 ====================

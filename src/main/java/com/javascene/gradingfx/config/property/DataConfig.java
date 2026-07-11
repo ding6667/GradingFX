@@ -9,4 +9,5 @@ public class DataConfig {
     private String standard;
     private String totalTask;
     private String currentStandard;
+    private String exportConfig;
 }

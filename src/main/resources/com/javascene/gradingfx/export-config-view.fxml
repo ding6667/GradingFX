@@ -7,28 +7,14 @@
 <AnchorPane xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="com.javascene.gradingfx.controller.ExportController"
             stylesheets="@styles.css"
-            prefWidth="500" prefHeight="400">
+            prefWidth="500" prefHeight="350">
 
     <VBox spacing="16" AnchorPane.topAnchor="0" AnchorPane.bottomAnchor="0"
           AnchorPane.leftAnchor="0" AnchorPane.rightAnchor="0"
           style="-fx-padding: 20;">
 
         <!-- Title -->
-        <Label text="导出配置" styleClass="title"/>
-
-        <!-- Export format -->
-        <VBox spacing="8" styleClass="card">
-            <Label text="导出格式" styleClass="subtitle"/>
-            <HBox spacing="24" alignment="CENTER_LEFT">
-                <RadioButton fx:id="excelRadio" text="Excel (.xlsx)" selected="true"
-                             toggleGroup="$formatGroup">
-                    <toggleGroup>
-                        <ToggleGroup fx:id="formatGroup"/>
-                    </toggleGroup>
-                </RadioButton>
-                <RadioButton fx:id="wordRadio" text="Word (.docx)" toggleGroup="$formatGroup"/>
-            </HBox>
-        </VBox>
+        <Label text="导出路径配置" styleClass="title"/>
 
         <!-- Save path -->
         <VBox spacing="8" styleClass="card">
@@ -44,20 +30,15 @@
         <!-- File name template -->
         <VBox spacing="8" styleClass="card">
             <Label text="文件名模板" styleClass="subtitle"/>
-            <TextField fx:id="fileNameField" promptText="例如: 作业成绩_{date}_{class}"/>
-            <Label text="可用变量: {date} 日期, {class} 班级, {course} 课程名"
+            <TextField fx:id="fileNameField" promptText="例如: 作业成绩_{date}_{taskName}"/>
+            <Label text="可用变量: {date} 日期, {taskName} 任务名称"
                    styleClass="secondary" wrapText="true"/>
-        </VBox>
-
-        <!-- Include teacher notes -->
-        <VBox styleClass="card">
-            <CheckBox fx:id="includeNotesCheck" text="包含教师备注" selected="true"/>
         </VBox>
 
         <!-- Bottom buttons -->
         <HBox spacing="12" alignment="CENTER_RIGHT">
-            <Button text="执行导出" fx:id="exportBtn" styleClass="primary-button"
-                    onAction="#handleExport"/>
+            <Button text="保存" fx:id="saveBtn" styleClass="primary-button"
+                    onAction="#handleSave"/>
             <Button text="取消" fx:id="cancelBtn" styleClass="secondary-button"
                     onAction="#handleCancel"/>
         </HBox>
