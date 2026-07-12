@@ -21,7 +21,12 @@ import com.javascene.gradingfx.service.Impl.StandardServiceImpl;
 import com.javascene.gradingfx.constant.ErrorMessageConstant;
 import com.javascene.gradingfx.util.AlertUtil;
 public class StandardController {
-    private final StandardService standardService = new StandardServiceImpl();
+    private StandardService standardService;
+    // 构造方法
+    public StandardController() {
+        standardService = new StandardServiceImpl();
+    }
+
     @FXML private TextArea standardTextArea;
     @FXML private TextField templateNameField;
     @FXML private ComboBox<String> templateCombo;
@@ -172,5 +177,27 @@ public class StandardController {
         Stage window = (Stage) standardTextArea.getScene().getWindow();
         window.close();
     }
+    @FXML
+    void setAsDefaultStandard() {
+        // 1. 获取文本框当前输入内容
+        String content = standardTextArea.getText();
+        boolean result;
+        try {
+            // 2. 调用service完成写入currentstandard
+            result = standardService.setCurrentDefaultStandard(content);
+        } catch (Exception e) {
+            e.printStackTrace();
+            AlertUtil.error(ErrorMessageConstant.UNKNOWN_ERROR);
+            return;
+        }
+        // 3. 根据结果弹出提示框（统一用AlertUtil）
+        if (result) {
+            AlertUtil.info(ErrorMessageConstant.SET_DEFAULT_SUCCESS);
+        } else {
+            AlertUtil.error(ErrorMessageConstant.SET_DEFAULT_FAIL);
+        }
+    }
+
+
 }
 

@@ -36,3 +36,5 @@ application.yml
 
 ### Mac OS ###
 .DS_Store
+# 本地模板缓存文件
+**/currentStandard.json

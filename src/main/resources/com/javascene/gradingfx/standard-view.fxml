@@ -53,5 +53,6 @@
         <Button text="取消" fx:id="cancelBtn" styleClass="secondary-button"
                 onAction="#handleCancel"/>
     </HBox>
+    <Button text="设为默认评分标准" onAction="#setAsDefaultStandard"/>
 
 </VBox>

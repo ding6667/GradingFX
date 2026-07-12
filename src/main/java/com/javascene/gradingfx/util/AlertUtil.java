@@ -219,4 +219,18 @@ public class AlertUtil {
         Optional<ButtonType> result = alert.showAndWait();
         return result.isPresent() && result.get() == ButtonType.OK;
     }
+    public static void info(String msg) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setContentText(msg);
+        alert.showAndWait();
+    }
+    // 错误提示弹窗
+    public static void error(String msg) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("错误");
+        alert.setContentText(msg);
+        alert.showAndWait();
+    }
+
 }
+

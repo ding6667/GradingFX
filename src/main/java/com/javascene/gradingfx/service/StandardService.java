@@ -22,5 +22,12 @@ public interface StandardService {
 
     String loadOtherTemplateByName(String templateName) throws IOException;
 
+    /**
+     * 将传入的评分文本写入currentstandard，设为全局默认模板
+     * @param text 文本框内的评分标准内容
+     * @return true=成功 false=失败
+     */
+    boolean setCurrentDefaultStandard(String text);
+
 }
 

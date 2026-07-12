@@ -78,4 +78,10 @@ public class ErrorMessageConstant {
     public static final String REVIEW_ERROR_PREFIX = "评分出错：";
     public static final String NO_TASK_TO_EXPORT = "没有可导出的评分任务";
     public static final String VIEW_LOAD_FAILED = "视图加载失败";
+    // 设置默认模板相关
+    public static final String SET_DEFAULT_SUCCESS = "已将当前内容设为默认评分标准！";
+    public static final String SET_DEFAULT_FAIL = "设置默认模板失败，请检查文件权限";
+
+
    }
+

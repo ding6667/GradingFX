@@ -137,6 +137,27 @@ public class StandardServiceImpl implements StandardService {
         // 返回文本内容给界面
         return template.getText();
     }
+    @Override
+    public boolean setCurrentDefaultStandard(String text) {
+        // 1. 读取yml配置里currentstandard文件路径
+        AppConfig appConfig = ConfigLoader.getConfig();
+        String path = appConfig.getData().getCurrentStandard();
+        File file = new File(path);
+        // 2. 父文件夹不存在就自动创建，防止报错
+        if (!file.getParentFile().exists()) {
+            file.getParentFile().mkdirs();
+        }
+        // 3. 封装实体类写入json
+        StandardConfig config = new StandardConfig();
+        config.setText(text);
+        try {
+            FileUtil.writeJson(path, config);
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
 
 
 }
