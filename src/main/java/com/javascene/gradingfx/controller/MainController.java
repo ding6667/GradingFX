@@ -115,14 +115,15 @@ public class MainController {
         });
 
         // 异步加载历史数据，避免启动时冻屏
+        final String[] latestTaskIdHolder = new String[1];
         Task<List<StudentResultProperty>> loadTask = new Task<>() {
             @Override
             protected List<StudentResultProperty> call() {
                 List<GradingTask> gradingTasks = new ArrayList<>(reviewService.loadAllTasks());
                 gradingTasks.sort(Comparator.comparing(GradingTask::getCreateTime).reversed());
                 if (!gradingTasks.isEmpty()) {
-                    String taskId = gradingTasks.get(0).getId();
-                    return new ArrayList<>(reviewService.loadTask(taskId));
+                    latestTaskIdHolder[0] = gradingTasks.get(0).getId();
+                    return new ArrayList<>(reviewService.loadTask(latestTaskIdHolder[0]));
                 }
                 return new ArrayList<>();
             }
@@ -130,6 +131,9 @@ public class MainController {
 
         loadTask.setOnSucceeded(e -> {
             List<StudentResultProperty> data = loadTask.getValue();
+            if (latestTaskIdHolder[0] != null) {
+                currentTaskId = latestTaskIdHolder[0];
+            }
             studentData.setAll(data);
             resultTable.setItems(studentData);
             totalLabel.setText(String.valueOf(studentData.size()));
@@ -161,6 +165,7 @@ public class MainController {
         gradingTasks.sort(Comparator.comparing(GradingTask::getCreateTime).reversed());
         if (!gradingTasks.isEmpty()) {
             String taskId = gradingTasks.get(0).getId();
+            currentTaskId = taskId;
             studentData.addAll(reviewService.loadTask(taskId));
         }
         resultTable.setItems(studentData);
@@ -175,6 +180,7 @@ public class MainController {
     }
 
     public void loadResults(String taskId) {
+        currentTaskId = taskId;
         List<StudentResultProperty> results = historyService.loadStudentResults(taskId);
         studentData.setAll(results);
         resultTable.setItems(studentData);
@@ -340,7 +346,8 @@ public class MainController {
         String rubric = standardService.getCurrentStandard();
 
         // 清空表格数据，准备新批阅
-        studentData.clear();
+        reset();
+        refresh();
         progressBar.setProgress(0);
         progressBar.getStyleClass().remove("success");
         progressLabel.setText("正在解压和转换文档...");
@@ -381,6 +388,23 @@ public class MainController {
         thread.setName("BatchStart-Thread");
         thread.start();
     }
+
+    private void reset() {
+        totalLabel.setText("0");
+        completedLabel.setText("0");
+        failedLabel.setText("0");
+        long pending = 0;
+        long completed = 0;
+        long failed = 0;
+
+        TreeItem<String> root = new TreeItem<>("学生列表");
+        root.setExpanded(true);
+        TreeItem<String> pendingItem = new TreeItem<>(" 待批阅 (" + pending + ")");
+        TreeItem<String> completedItem = new TreeItem<>(" 已完成 (" + completed + ")");
+        TreeItem<String> failedItem = new TreeItem<>(" 失败 (" + failed + ")");
+        root.getChildren().addAll(pendingItem, completedItem, failedItem);
+        studentTree.setRoot(root);
+        studentTree.setShowRoot(false);    }
 
     @FXML void handlePause() {
         reviewService.pauseReview();

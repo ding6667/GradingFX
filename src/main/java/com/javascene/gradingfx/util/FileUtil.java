@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.apache.commons.io.FileUtils;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -81,10 +82,10 @@ public class FileUtil {
      */
     public static <T> T readJson(String filePath, Class<T> clazz) throws IOException {
         File file = new File(filePath);
-        if (!file.exists() || !file.isFile()) {
+        if (!file.exists() || !file.isFile() || file.length() == 0) {
             return null;
         }
-        return MAPPER.readValue(new File(filePath), clazz);
+        return MAPPER.readValue(file, clazz);
     }
 
     /**

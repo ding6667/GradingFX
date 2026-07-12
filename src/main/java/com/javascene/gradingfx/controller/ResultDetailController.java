@@ -55,10 +55,18 @@ public class ResultDetailController {
         if (currentResult == null || taskId == null) {
             return;
         }
-
-        String teacherScore = teacherScoreField.getText().trim();
-        String teacherComment = teacherCommentArea.getText().trim();
-        String teacherNote = teacherNoteArea.getText().trim();
+        String teacherScore = "";
+        String teacherComment = "";
+        String teacherNote = "";
+        if (teacherScoreField.getText() != null && !teacherScoreField.getText().isEmpty()) {
+             teacherScore = teacherScoreField.getText().trim();
+        }
+        if  (teacherCommentArea.getText() != null && !teacherCommentArea.getText().isEmpty()) {
+             teacherComment = teacherCommentArea.getText().trim();
+        }
+        if  (teacherNoteArea.getText() != null && !teacherNoteArea.getText().isEmpty()) {
+             teacherNote = teacherNoteArea.getText().trim();
+        }
 
         // 校验分数格式（非空时必须是 0-100 的数字）
         if (!teacherScore.isEmpty()) {

@@ -78,4 +78,12 @@
   "excelPath" : "src/main/java/com/javascene/gradingfx/file/result\\eb7da019-6313-4dd5-975a-fc965402a1ab\\summary.xlsx",
   "scoreChanged" : 0,
   "expireTime" : "2026-07-18T20:36:45.0183153"
+}, {
+  "taskId" : "eaf64827-09b8-4c9d-9e97-6134fe0fe28a",
+  "status" : 0,
+  "createTime" : "2026-07-12T15:46:17.6507714",
+  "wordPath" : null,
+  "excelPath" : null,
+  "scoreChanged" : 0,
+  "expireTime" : "2026-07-19T15:46:17.7256947"
 } ]

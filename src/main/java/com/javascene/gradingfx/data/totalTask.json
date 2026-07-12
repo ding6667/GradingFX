@@ -108,4 +108,15 @@
   "finishTime" : "2026-07-11T20:36:45.014537",
   "errorMessage" : null,
   "retryCount" : 1
+}, {
+  "id" : "eaf64827-09b8-4c9d-9e97-6134fe0fe28a",
+  "filePath" : "E:\\杂文件\\智能体\\编程\\编程\\singleTest.zip",
+  "taskName" : "singleTest",
+  "totalStudents" : 1,
+  "gradedStudents" : 0,
+  "status" : 2,
+  "createTime" : "2026-07-12T15:46:06.0916739",
+  "finishTime" : "2026-07-12T15:46:17.7231667",
+  "errorMessage" : null,
+  "retryCount" : 1
 } ]
