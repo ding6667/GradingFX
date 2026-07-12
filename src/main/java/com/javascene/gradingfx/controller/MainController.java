@@ -189,6 +189,7 @@ public class MainController {
         long failed = results.stream().filter(r -> r.getStatus() == ReviewStatus.FAILED).count();
         completedLabel.setText(String.valueOf(completed));
         failedLabel.setText(String.valueOf(failed));
+        setupStudentTree();
     }
 
     private void setupStudentTree() {
@@ -597,6 +598,7 @@ public class MainController {
         showView("result-detail-view.fxml", "查看详情", controller -> {
             ((ResultDetailController) controller).setStudentResult(selected, currentTaskId);
         });
+
     }
 
     @FXML void handleExportExcel() {
