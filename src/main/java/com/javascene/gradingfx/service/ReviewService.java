@@ -14,7 +14,6 @@ public interface ReviewService {
     List<GradingTask> loadAllTasks();
     List<StudentResultProperty> loadTask(String taskId);
 
-    // ==================== 多线程批阅引擎 ====================
 
     /**
      * 从 zip 包提取学生作业并启动批阅

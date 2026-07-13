@@ -8,6 +8,8 @@ import java.util.List;
 import javafx.scene.control.ChoiceDialog;
 import java.util.List;
 import java.util.Optional;
+import java.util.Random;
+
 import com.javascene.gradingfx.constant.ErrorMessageConstant;
 import javafx.stage.Stage;
 import com.javascene.gradingfx.util.FileUtil;
@@ -135,7 +137,6 @@ public class StandardController {
         try {
             standardService.saveCustomTemplate(name, text);
             AlertUtil.showInfo(ErrorMessageConstant.SAVE_TEMPLATE_SUCCESS);
-            // 下拉框新增名称
             templateCombo.getItems().add(name);
             templateCombo.setValue(name);
             templateNameField.clear();
@@ -179,18 +180,16 @@ public class StandardController {
     }
     @FXML
     void setAsDefaultStandard() {
-        // 1. 获取文本框当前输入内容
         String content = standardTextArea.getText();
         boolean result;
         try {
-            // 2. 调用service完成写入currentstandard
             result = standardService.setCurrentDefaultStandard(content);
+            standardService.saveCustomTemplate("未命名" + new Random().nextInt(1000000), content);
         } catch (Exception e) {
             e.printStackTrace();
             AlertUtil.error(ErrorMessageConstant.UNKNOWN_ERROR);
             return;
         }
-        // 3. 根据结果弹出提示框（统一用AlertUtil）
         if (result) {
             AlertUtil.info(ErrorMessageConstant.SET_DEFAULT_SUCCESS);
         } else {

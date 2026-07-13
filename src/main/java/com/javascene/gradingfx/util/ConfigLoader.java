@@ -12,9 +12,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-/**
- * 配置加载器，负责从 YAML 文件加载配置
- */
 public class ConfigLoader {
     private static final ObjectMapper MAPPER = new ObjectMapper(new YAMLFactory())
             .findAndRegisterModules()
@@ -44,16 +41,10 @@ public class ConfigLoader {
         }
     }
 
-    /**
-     * 获取配置实例（单例）
-     */
     public static AppConfig getConfig() {
         return instance;
     }
 
-    /**
-     * 热重载配置（用于修改配置后无需重启）
-     */
     public static void reload() {
         load();
     }

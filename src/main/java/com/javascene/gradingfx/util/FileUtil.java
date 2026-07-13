@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import org.apache.commons.io.FileUtils;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -12,10 +11,6 @@ import java.nio.file.*;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * 文件工具类，支持普通读写和JSON序列化读写
- * 直接使用 Jackson 处理包含 JavaFX SimpleProperty 的对象（通过 getter/setter）
- */
 public class FileUtil {
 
     private static final ObjectMapper MAPPER = new ObjectMapper()
@@ -23,7 +18,6 @@ public class FileUtil {
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
             .enable(SerializationFeature.INDENT_OUTPUT);
 
-    // ==================== 普通读写 ====================
 
     /**
      * 按行读取文件内容
@@ -62,7 +56,6 @@ public class FileUtil {
         Files.write(Paths.get(filePath), lines, StandardCharsets.UTF_8);
     }
 
-    // ==================== JSON 序列化读写 ====================
 
     /**
      * 将对象序列化为 JSON 并写入文件
@@ -111,8 +104,6 @@ public class FileUtil {
         return MAPPER.readValue(file, typeRef);
     }
 
-    // ==================== 二进制序列化读写 ====================
-
     /**
      * 使用 Java 原生序列化写入对象（需实现 Serializable）
      */
@@ -134,8 +125,6 @@ public class FileUtil {
             return (T) ois.readObject();
         }
     }
-
-    // ==================== 文件与目录操作 ====================
 
     /**
      * 确保目录存在

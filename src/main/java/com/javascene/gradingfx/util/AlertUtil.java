@@ -10,9 +10,7 @@ import javafx.stage.Window;
 
 import java.util.Optional;
 
-/**
- * 消息弹窗工具类，提供统一的弹窗样式和交互
- */
+
 public class AlertUtil {
 
     private static final String STYLE_SHEET = AlertUtil.class.getResource("alert-styles.css") != null
@@ -21,21 +19,14 @@ public class AlertUtil {
 
     // ==================== 信息弹窗 ====================
 
-    /**
-     * 显示信息提示弹窗
-     */
+
     public static void showInfo(String message) {
         showAlert(Alert.AlertType.INFORMATION, "信息", message);
     }
 
-    /**
-     * 显示信息提示弹窗（自定义标题）
-     */
     public static void showInfo(String title, String message) {
         showAlert(Alert.AlertType.INFORMATION, title, message);
     }
-
-    // ==================== 成功弹窗 ====================
 
     /**
      * 显示成功提示弹窗
@@ -51,7 +42,6 @@ public class AlertUtil {
         showAlert(Alert.AlertType.INFORMATION, title, message);
     }
 
-    // ==================== 警告弹窗 ====================
 
     /**
      * 显示警告弹窗
@@ -67,7 +57,6 @@ public class AlertUtil {
         showAlert(Alert.AlertType.WARNING, "⚠️ " + title, message);
     }
 
-    // ==================== 错误弹窗 ====================
 
     /**
      * 显示错误弹窗
@@ -89,8 +78,6 @@ public class AlertUtil {
     public static void showError(String message, Throwable exception) {
         showAlert(Alert.AlertType.ERROR, "错误", message, exception);
     }
-
-    // ==================== 确认弹窗 ====================
 
     /**
      * 显示确认弹窗，返回用户选择
@@ -127,8 +114,6 @@ public class AlertUtil {
         return alert.showAndWait();
     }
 
-    // ==================== 输入弹窗 ====================
-
     /**
      * 显示输入弹窗
      */
@@ -142,7 +127,6 @@ public class AlertUtil {
         return textInputDialog.showAndWait();
     }
 
-    // ==================== 核心方法 ====================
 
     private static void showAlert(Alert.AlertType type, String title, String message) {
         Alert alert = new Alert(type);
@@ -180,8 +164,6 @@ public class AlertUtil {
             dialogPane.getStylesheets().add(STYLE_SHEET);
         }
     }
-
-    // ==================== 高级用法 ====================
 
     /**
      * 创建自定义 Alert 实例（用于更复杂的场景）

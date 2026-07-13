@@ -49,7 +49,6 @@ public class ReviewServiceImpl implements ReviewService {
     private final com.javascene.gradingfx.config.property.DifyConfig.ApiConfig difyProperty;
     private final String resultPath; // 导出文件根路径
 
-    // ==================== 批阅引擎线程控制 ====================
     private final ReentrantLock pauseLock = new ReentrantLock();
     private final Condition pausedCondition = pauseLock.newCondition();
     private volatile boolean isPaused = false;
@@ -57,17 +56,14 @@ public class ReviewServiceImpl implements ReviewService {
     private volatile boolean isRunning = false;
     private volatile Thread schedulerThread;
 
-    // ==================== 当前任务状态 ====================
     private volatile List<StudentResult> currentStudents;
     private volatile String currentTaskId;
     private volatile String currentRubric;
     private volatile int completedCount = 0;
     private volatile int failedCount = 0;
     private volatile ReviewService.ReviewProgressCallback currentCallback;
-    /** 重试时保存完整学生列表，用于回调返回完整结果 */
     private volatile List<StudentResult> fullStudentList;
 
-    // ==================== 依赖组件 ====================
     private final StudentResultRepository studentRepository = new StudentResultRepository();
     private final ExportServiceImpl exportService = new ExportServiceImpl();
 
@@ -593,7 +589,7 @@ public class ReviewServiceImpl implements ReviewService {
             // 创建 GradingResult 并写入 results.json
             GradingResult gradingResult = new GradingResult();
             gradingResult.setTaskId(taskId);
-            gradingResult.setStatus(1); // 处理中
+            gradingResult.setStatus(1);
             gradingResult.setCreateTime(LocalDateTime.now());
             gradingResult.setScoreChanged(0);
             try {
@@ -1158,11 +1154,7 @@ public class ReviewServiceImpl implements ReviewService {
         return null;
     }
 
-    // ==================== 辅助方法 ====================
 
-    /**
-     * 确保文件路径的父目录存在（避免误将文件路径当目录创建）
-     */
     private void ensureParentDirExists(String filePath) throws IOException {
         File parent = new File(filePath).getParentFile();
         if (parent != null) {
@@ -1191,8 +1183,6 @@ public class ReviewServiceImpl implements ReviewService {
     private String getResultDir(String taskId) {
         return resultPath + File.separator + taskId;
     }
-
-    // ==================== 导出路径配置 ====================
 
     /**
      * 加载导出路径配置

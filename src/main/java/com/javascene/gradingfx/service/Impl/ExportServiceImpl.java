@@ -70,74 +70,6 @@ public class ExportServiceImpl implements ExportService {
     }
 
     @Override
-    public void exportWord(List<StudentResult> students, String outputPath) {
-        log.info("开始生成 Word: {}", outputPath);
-        try { FileUtil.ensureDirExists(new File(outputPath).getParentFile().getAbsolutePath()); } catch (IOException e) { log.error("创建目录失败: {}", e.getMessage()); }
-        try (XWPFDocument doc = new XWPFDocument()) {
-            // 标题
-            XWPFParagraph title = doc.createParagraph();
-            title.setAlignment(ParagraphAlignment.CENTER);
-            XWPFRun titleRun = title.createRun();
-            titleRun.setText("作业批阅结果汇总");
-            titleRun.setBold(true);
-            titleRun.setFontSize(18);
-
-            // 空行
-            doc.createParagraph();
-
-            // 逐个学生
-            for (StudentResult s : students) {
-                // 学号姓名
-                XWPFParagraph header = doc.createParagraph();
-                XWPFRun headerRun = header.createRun();
-                headerRun.setText("学号: " + nvl(s.getStudentId()) + "    姓名: " + nvl(s.getStudentName()));
-                headerRun.setBold(true);
-                headerRun.setFontSize(12);
-
-                // 评分
-                XWPFParagraph score = doc.createParagraph();
-                XWPFRun scoreRun = score.createRun();
-                scoreRun.setText("AI评分: " + nvl(s.getRawScore()) + "    教师评分: " + nvl(s.getTeacherScore()));
-
-                // 评语
-                if (s.getAiComment() != null && !s.getAiComment().isEmpty()) {
-                    XWPFParagraph comment = doc.createParagraph();
-                    XWPFRun commentRun = comment.createRun();
-                    commentRun.setText("AI评语: " + s.getAiComment());
-                }
-
-                // 教师评语
-                if (s.getTeacherComment() != null && !s.getTeacherComment().isEmpty()) {
-                    XWPFParagraph tc = doc.createParagraph();
-                    XWPFRun tcRun = tc.createRun();
-                    tcRun.setText("教师评语: " + s.getTeacherComment());
-                }
-
-                // 错误信息
-                if (s.getErrorMessage() != null && !s.getErrorMessage().isEmpty()) {
-                    XWPFParagraph err = doc.createParagraph();
-                    XWPFRun errRun = err.createRun();
-                    errRun.setText("错误信息: " + s.getErrorMessage());
-                    errRun.setColor("FF0000");
-                }
-
-                // 分隔线
-                XWPFParagraph sep = doc.createParagraph();
-                XWPFRun sepRun = sep.createRun();
-                sepRun.setText("──────────────────────────────");
-                sepRun.setFontSize(8);
-            }
-
-            try (FileOutputStream fos = new FileOutputStream(outputPath)) {
-                doc.write(fos);
-            }
-            log.info("Word 生成成功: {}", outputPath);
-        } catch (IOException e) {
-            log.error("生成 Word 失败: {}", e.getMessage(), e);
-        }
-    }
-
-    @Override
     public void exportTxt(StudentResult student, String outputPath) {
         try { FileUtil.ensureDirExists(new File(outputPath).getParentFile().getAbsolutePath()); } catch (IOException e) { log.error("创建目录失败: {}", e.getMessage()); }
         StringBuilder sb = new StringBuilder();
@@ -174,19 +106,6 @@ public class ExportServiceImpl implements ExportService {
         }
     }
 
-    @Override
-    public String exportWord(String taskId) {
-        // 实际导出逻辑由 ReviewServiceImpl.exportWord(taskId) 处理
-        return null;
-    }
-
-    @Override
-    public String exportExcel(String taskId) {
-        // 实际导出逻辑由 ReviewServiceImpl.exportExcel(taskId) 处理
-        return null;
-    }
-
-    // ==================== 私有工具方法 ====================
 
     private void setCellValue(XSSFRow row, int col, String value) {
         XSSFCell cell = row.createCell(col);

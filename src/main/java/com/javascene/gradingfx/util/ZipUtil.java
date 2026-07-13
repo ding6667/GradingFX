@@ -11,7 +11,7 @@ import java.util.zip.ZipInputStream;
 public class ZipUtil {
 
     /**
-     * 递归查找目录下的 Word 文档（.docx 或 .doc）
+     * 递归查找目录下的 Word 文档
      */
     public static File findWordFile(File dir) {
         File[] files = dir.listFiles();

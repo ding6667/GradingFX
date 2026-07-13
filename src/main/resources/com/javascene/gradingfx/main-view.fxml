@@ -9,7 +9,6 @@
             stylesheets="@styles.css"
             prefWidth="1200" prefHeight="800">
 
-    <!-- Top: Header bar -->
     <top>
         <HBox alignment="CENTER_LEFT" spacing="20" styleClass="header-bar">
             <padding>
@@ -26,7 +25,6 @@
         </HBox>
     </top>
 
-    <!-- Left: Upload and student tree -->
     <left>
         <VBox spacing="12" prefWidth="280" style="-fx-padding: 12; -fx-background-color: #F7F8FA;">
             <!-- Upload area -->
@@ -46,7 +44,6 @@
                 </VBox>
             </StackPane>
 
-            <!-- Selected files area -->
             <VBox fx:id="selectedFilesArea" styleClass="card" VBox.vgrow="NEVER" visible="false" managed="false"
                   style="-fx-min-height: 120px;">
                 <padding><Insets top="10" right="12" bottom="10" left="12"/></padding>
@@ -60,16 +57,13 @@
                 <ListView fx:id="selectedFilesList" prefHeight="80" VBox.vgrow="ALWAYS"/>
             </VBox>
 
-            <!-- Student tree -->
             <Label text="学生列表" styleClass="subtitle"/>
             <TreeView fx:id="studentTree" VBox.vgrow="ALWAYS" prefHeight="400"/>
         </VBox>
     </left>
 
-    <!-- Center: Statistics and results -->
     <center>
         <VBox spacing="12" style="-fx-padding: 0 12 12 0; -fx-background-color: #F7F8FA;">
-            <!-- Statistics cards -->
             <HBox spacing="12">
                 <VBox styleClass="stat-card" prefWidth="180">
                     <Label text="总人数" styleClass="secondary"/>
@@ -88,7 +82,6 @@
                 </VBox>
             </HBox>
 
-            <!-- Progress -->
             <HBox spacing="10" alignment="CENTER_LEFT" styleClass="card" style="-fx-padding: 8px 14px;">
                 <Label text="批阅进度" style="-fx-font-size: 12px; -fx-font-weight: 600; -fx-text-fill: #8C8C8C;"/>
                 <ProgressBar fx:id="progressBar" progress="0.0" prefHeight="6" prefWidth="200"
@@ -97,7 +90,6 @@
                        style="-fx-font-size: 12px; -fx-font-weight: 700; -fx-text-fill: #52C41A;"/>
             </HBox>
 
-            <!-- Control buttons -->
             <HBox spacing="8" alignment="CENTER_LEFT" style="-fx-padding: 4px 0;">
                 <Button text="开始批阅" fx:id="startBtn" styleClass="primary-button"
                         onAction="#handleStart"/>
@@ -112,7 +104,6 @@
                         onAction="#handleViewDetail"/>
             </HBox>
 
-            <!-- Results table -->
             <VBox VBox.vgrow="ALWAYS">
                 <TableView fx:id="resultTable" VBox.vgrow="ALWAYS">
                     <columns>
@@ -132,7 +123,6 @@
         </VBox>
     </center>
 
-    <!-- Bottom: Export buttons -->
     <bottom>
         <HBox alignment="CENTER_RIGHT" spacing="12"
               style="-fx-background-color: #FFFFFF; -fx-border-color: #F0F0F0; -fx-border-width: 1px 0 0 0;">
